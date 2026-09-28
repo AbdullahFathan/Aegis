@@ -58,3 +58,18 @@ func IsLocationOfficer(actor authctx.Principal, loc database.Location) bool {
 func IsLocationSupervisor(actor authctx.Principal, loc database.Location) bool {
 	return loc.SupervisorID == actor.ID
 }
+
+func ApplyCAListFilter(db *gorm.DB, actor authctx.Principal) *gorm.DB {
+	q := db.Model(&database.CorrectiveAction{}).
+		Joins("JOIN incidents ON incidents.id = corrective_actions.incident_id AND incidents.deleted_at IS NULL")
+	switch actor.Role {
+	case database.RoleReporter:
+		return q.Where("corrective_actions.assignee_id = ?", actor.ID)
+	case database.RoleSupervisor:
+		return q.Where("incidents.location_id IN (?)", db.Model(&database.Location{}).Select("id").Where("supervisor_id = ?", actor.ID))
+	case database.RoleHSEOfficer:
+		return q.Where("incidents.location_id IN (?)", db.Model(&database.Location{}).Select("id").Where("hse_officer_id = ?", actor.ID))
+	default:
+		return q
+	}
+}

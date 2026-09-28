@@ -124,6 +124,24 @@ CREATE TABLE IF NOT EXISTS incident_files (
     created_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS rca_templates (
+    id UUID PRIMARY KEY,
+    category VARCHAR(64) NOT NULL UNIQUE,
+    payload JSONB,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_type VARCHAR(64) NOT NULL,
+    email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    UNIQUE (user_id, event_type)
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY,
     recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

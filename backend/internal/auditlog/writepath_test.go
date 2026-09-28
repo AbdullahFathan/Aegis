@@ -48,7 +48,7 @@ func TestSubmitStatusChangedAndFileUploaded(t *testing.T) {
 	fs := &file.Service{Repo: &incident.Repository{DB: db}, Store: storage.NewMemory(), Audit: audit}
 	_, err = fs.Upload(context.Background(), row.ID, []file.Upload{{
 		Name: "photo.jpg", Content: []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10},
-	}}, actor, "10.0.0.1")
+	}}, actor, "10.0.0.1", nil)
 	require.NoError(t, err)
 
 	submitted, err := incSvc.Submit(context.Background(), row.ID, actor, "10.0.0.1")

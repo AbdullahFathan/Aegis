@@ -10,6 +10,7 @@ import (
 
 	"aegis/internal/auditlog"
 	"aegis/internal/auth"
+	correctiveaction "aegis/internal/corrective_action"
 	"aegis/internal/file"
 	"aegis/internal/incident"
 	"aegis/pkg/authctx"
@@ -67,13 +68,13 @@ func TestRejectFakeMIMEAndOversize(t *testing.T) {
 
 	_, err := fs.Upload(context.Background(), row.ID, []file.Upload{{
 		Name: "photo.jpg", Content: []byte("%PDF-1.4 fake"),
-	}}, actor, "ip")
+	}}, actor, "ip", nil)
 	require.ErrorIs(t, err, incident.ErrValidation)
 
 	big := bytes.Repeat([]byte{0xFF, 0xD8, 0xFF}, int(storage.MaxBytes/3)+10)
 	_, err = fs.Upload(context.Background(), row.ID, []file.Upload{{
 		Name: "photo.jpg", Content: big,
-	}}, actor, "ip")
+	}}, actor, "ip", nil)
 	require.ErrorIs(t, err, incident.ErrValidation)
 }
 
@@ -82,7 +83,7 @@ func TestDeleteAfterSubmitRejectedAndPresignExpiry(t *testing.T) {
 	row, actor, fs, mem := seed(t, db)
 	created, err := fs.Upload(context.Background(), row.ID, []file.Upload{{
 		Name: "photo.jpg", Content: jpegBytes(),
-	}}, actor, "ip")
+	}}, actor, "ip", nil)
 	require.NoError(t, err)
 	require.Len(t, created, 1)
 	require.True(t, strings.HasPrefix(created[0].StoredKey, "incidents/"))
@@ -104,4 +105,28 @@ func TestDeleteAfterSubmitRejectedAndPresignExpiry(t *testing.T) {
 
 	err = fs.Delete(row.ID, created[0].ID, actor)
 	require.ErrorIs(t, err, incident.ErrIllegal)
+}
+
+func TestUploadCACompletion(t *testing.T) {
+	db := testDB(t)
+	row, actor, fs, _ := seed(t, db)
+	var off database.User
+	require.NoError(t, db.Where("email = ?", "off@example.com").First(&off).Error)
+	incSvc := &incident.Service{Repo: &incident.Repository{DB: db}, Audit: auditlog.Noop{}}
+	submitted, err := incSvc.Submit(context.Background(), row.ID, actor, "ip")
+	require.NoError(t, err)
+	caSvc := &correctiveaction.Service{DB: db, Audit: auditlog.Noop{}}
+	ca, err := caSvc.Create(context.Background(), submitted.ID, correctiveaction.CreateInput{
+		Description: "photo evidence", ActionType: database.ActionImmediate, Priority: database.PriorityLow,
+		AssigneeID: actor.ID, DueDate: time.Now().UTC().Add(24 * time.Hour),
+	}, authctx.Principal{ID: off.ID, Role: off.Role}, "ip")
+	require.NoError(t, err)
+	id := ca.ID
+	created, err := fs.Upload(context.Background(), submitted.ID, []file.Upload{{
+		Name: "photo.jpg", Content: jpegBytes(),
+	}}, actor, "ip", &id)
+	require.NoError(t, err)
+	require.Equal(t, database.FileCACompletion, created[0].Context)
+	require.NotNil(t, created[0].CorrectiveActionID)
+	require.Equal(t, ca.ID, *created[0].CorrectiveActionID)
 }

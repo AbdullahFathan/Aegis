@@ -2,7 +2,7 @@
 //
 //	@title			Aegis API
 //	@version		1.0
-//	@description	K3 incident reporting backend (Phase 2: incidents, workflow, files).
+//	@description	K3 incident reporting backend (Phase 3: RCA, CA, notifications).
 //	@BasePath		/
 //
 //	@securityDefinitions.apikey	BearerAuth
@@ -19,14 +19,18 @@ import (
 	_ "aegis/docs"
 	"aegis/internal/auditlog"
 	"aegis/internal/auth"
+	correctiveaction "aegis/internal/corrective_action"
 	"aegis/internal/file"
 	"aegis/internal/incident"
 	"aegis/internal/location"
+	"aegis/internal/notification"
+	"aegis/internal/rca"
 	"aegis/internal/user"
 	"aegis/internal/workflow"
 	"aegis/pkg/database"
 	"aegis/pkg/logger"
 	"aegis/pkg/middleware"
+	"aegis/pkg/notifier"
 	"aegis/pkg/rbac"
 	"aegis/pkg/redisx"
 	"aegis/pkg/response"
@@ -122,8 +126,15 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	locH := &location.Handler{Service: &location.Service{Repo: &location.Repository{DB: db}, Audit: audit}}
 
 	incRepo := &incident.Repository{DB: db}
-	incH := &incident.Handler{Service: &incident.Service{Repo: incRepo, Audit: audit}}
-	wfH := &workflow.Handler{Service: &workflow.Service{DB: db, Audit: audit}}
+	notifSvc := &notification.Service{
+		DB: db, Mailer: notifier.NoopMailer{}, Log: log, Once: notification.RedisOnce{Client: rdb},
+	}
+	emerg := notifier.LogEmergency{Log: log}
+	incH := &incident.Handler{Service: &incident.Service{Repo: incRepo, Audit: audit, Notify: notifSvc, Emergency: emerg}}
+	wfH := &workflow.Handler{Service: &workflow.Service{DB: db, Audit: audit, Notify: notifSvc, Emergency: emerg}}
+	rcaH := &rca.Handler{Service: &rca.Service{DB: db, Audit: audit}}
+	caH := &correctiveaction.Handler{Service: &correctiveaction.Service{DB: db, Audit: audit, Notify: notifSvc}}
+	notifH := &notification.Handler{Service: notifSvc}
 	var store storage.ObjectStore = storage.NewMemory()
 	if cfg.RustFSAccessKey != "" && cfg.RustFSSecretKey != "" {
 		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
@@ -164,6 +175,21 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/files", fileH.List)
 		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Post("/incidents/{id}/files", fileH.Upload)
 		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Delete("/incidents/{id}/files/{fileId}", fileH.Delete)
+
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/rca", rcaH.Get)
+		ar.With(middleware.RequirePermission(rbac.RCAWrite)).Put("/incidents/{id}/rca", rcaH.Upsert)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/rca-templates/{category}", rcaH.GetTemplate)
+		ar.With(middleware.RequirePermission(rbac.RCAWrite)).Put("/rca-templates/{category}", rcaH.PutTemplate)
+
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/corrective-actions", caH.ListByIncident)
+		ar.With(middleware.RequirePermission(rbac.CAWrite)).Post("/incidents/{id}/corrective-actions", caH.Create)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/corrective-actions", caH.Tracker)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Patch("/corrective-actions/{id}", caH.Patch)
+		ar.With(middleware.RequirePermission(rbac.CAVerify)).Post("/corrective-actions/{id}/verify", caH.Verify)
+
+		ar.Get("/notifications", notifH.List)
+		ar.Patch("/notifications/{id}/read", notifH.MarkRead)
+		ar.Put("/notifications/preferences", notifH.PutPreference)
 	})
 
 	return r

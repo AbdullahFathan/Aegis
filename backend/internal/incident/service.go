@@ -11,15 +11,22 @@ import (
 	"aegis/internal/incscope"
 	"aegis/pkg/authctx"
 	"aegis/pkg/database"
+	"aegis/pkg/notifier"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+type SubmitNotifier interface {
+	OnIncidentSubmitted(ctx context.Context, inc database.Incident, loc database.Location)
+}
+
 type Service struct {
-	Repo  *Repository
-	Audit auditlog.Writer
-	Now   func() time.Time
+	Repo      *Repository
+	Audit     auditlog.Writer
+	Notify    SubmitNotifier
+	Emergency notifier.EmergencyNotifier
+	Now       func() time.Time
 }
 
 func (s *Service) now() time.Time {
@@ -270,7 +277,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 }
 
 func (s *Service) Submit(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip string) (database.Incident, error) {
-	inc, _, err := s.load(id)
+	inc, loc, err := s.load(id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -316,6 +323,12 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID, actor authctx.Princi
 		EntityType: "Incident", EntityID: inc.ID.String(),
 		Action: database.AuditStatusChanged, Before: before, After: Snapshot(inc),
 	})
+	if s.Notify != nil {
+		s.Notify.OnIncidentSubmitted(ctx, inc, loc)
+	}
+	if inc.Category == database.CategoryFatality && s.Emergency != nil {
+		_ = s.Emergency.NotifyFatality(ctx, inc.ID, inc.Title)
+	}
 	return inc, nil
 }
 

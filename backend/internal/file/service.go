@@ -48,7 +48,7 @@ type Upload struct {
 	Content []byte
 }
 
-func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Upload, actor authctx.Principal, ip string) ([]database.IncidentFile, error) {
+func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Upload, actor authctx.Principal, ip string, caID *uuid.UUID) ([]database.IncidentFile, error) {
 	if len(files) == 0 {
 		return nil, incident.WrapValidation("at least one file is required")
 	}
@@ -59,8 +59,18 @@ func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Uplo
 	if err != nil {
 		return nil, err
 	}
-	if !s.canWrite(actor, inc, loc) {
+	if !s.canUpload(actor, inc, loc, caID) {
 		return nil, incident.ErrForbidden
+	}
+	var caPtr *uuid.UUID
+	ctxType := database.FileIncidentEvidence
+	if caID != nil {
+		var ca database.CorrectiveAction
+		if err := s.Repo.DB.First(&ca, "id = ?", *caID).Error; err != nil || ca.IncidentID != incidentID {
+			return nil, incident.WrapValidation("correctiveActionId does not belong to incident")
+		}
+		caPtr = caID
+		ctxType = database.FileCACompletion
 	}
 
 	out := make([]database.IncidentFile, 0, len(files))
@@ -86,13 +96,14 @@ func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Uplo
 			return nil, err
 		}
 		row := database.IncidentFile{
-			IncidentID:   incidentID,
-			UploadedByID: actor.ID,
-			OriginalName: f.Name,
-			StoredKey:    key,
-			MimeType:     want,
-			SizeBytes:    int64(len(f.Content)),
-			Context:      database.FileIncidentEvidence,
+			IncidentID:         incidentID,
+			CorrectiveActionID: caPtr,
+			UploadedByID:       actor.ID,
+			OriginalName:       f.Name,
+			StoredKey:          key,
+			MimeType:           want,
+			SizeBytes:          int64(len(f.Content)),
+			Context:            ctxType,
 		}
 		if err := s.Repo.CreateFile(&row); err != nil {
 			return nil, err
@@ -129,15 +140,16 @@ func (s *Service) List(ctx context.Context, incidentID uuid.UUID, actor authctx.
 			return nil, err
 		}
 		out = append(out, map[string]any{
-			"id":           it.ID,
-			"originalName": it.OriginalName,
-			"mimeType":     it.MimeType,
-			"sizeBytes":    it.SizeBytes,
-			"context":      it.Context,
-			"storedKey":    it.StoredKey,
-			"url":          url,
-			"expiresIn":    int(expiry.Seconds()),
-			"createdAt":    it.CreatedAt,
+			"id":                 it.ID,
+			"originalName":       it.OriginalName,
+			"mimeType":           it.MimeType,
+			"sizeBytes":          it.SizeBytes,
+			"context":            it.Context,
+			"correctiveActionId": it.CorrectiveActionID,
+			"storedKey":          it.StoredKey,
+			"url":                url,
+			"expiresIn":          int(expiry.Seconds()),
+			"createdAt":          it.CreatedAt,
 		})
 	}
 	return out, nil
@@ -163,6 +175,19 @@ func (s *Service) Delete(incidentID, fileID uuid.UUID, actor authctx.Principal) 
 		return incident.ErrNotFound
 	}
 	return s.Repo.DeleteFile(fileID)
+}
+
+func (s *Service) canUpload(actor authctx.Principal, inc database.Incident, loc database.Location, caID *uuid.UUID) bool {
+	if inc.Status == database.StatusClosed {
+		return false
+	}
+	if caID != nil {
+		var ca database.CorrectiveAction
+		if err := s.Repo.DB.First(&ca, "id = ?", *caID).Error; err == nil && ca.IncidentID == inc.ID && ca.AssigneeID == actor.ID {
+			return true
+		}
+	}
+	return s.canWrite(actor, inc, loc)
 }
 
 func (s *Service) canWrite(actor authctx.Principal, inc database.Incident, loc database.Location) bool {

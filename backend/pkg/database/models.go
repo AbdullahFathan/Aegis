@@ -354,8 +354,13 @@ type NotificationType string
 const (
 	NotifIncidentSubmitted NotificationType = "INCIDENT_SUBMITTED"
 	NotifIncidentEscalated NotificationType = "INCIDENT_ESCALATED"
+	NotifIncidentVerified  NotificationType = "INCIDENT_VERIFIED"
+	NotifIncidentRejected  NotificationType = "INCIDENT_REJECTED"
+	NotifIncidentClosed    NotificationType = "INCIDENT_CLOSED"
 	NotifSLAWarning        NotificationType = "SLA_WARNING"
+	NotifSLAOverdue        NotificationType = "SLA_OVERDUE"
 	NotifCAAssigned        NotificationType = "CA_ASSIGNED"
+	NotifCADueSoon         NotificationType = "CA_DUE_SOON"
 	NotifCAOverdue         NotificationType = "CA_OVERDUE"
 )
 
@@ -385,6 +390,44 @@ type Notification struct {
 
 func (n *Notification) BeforeCreate(tx *gorm.DB) error {
 	assignID(&n.ID)
+	return nil
+}
+
+type RCATemplatePayload struct {
+	Timeline          string    `json:"timeline"`
+	HumanFactor       string    `json:"humanFactor"`
+	EnvironmentFactor string    `json:"environmentFactor"`
+	EquipmentFactor   string    `json:"equipmentFactor"`
+	FiveWhys          []FiveWhy `json:"fiveWhys"`
+	Fishbone          Fishbone  `json:"fishbone"`
+}
+
+type RCATemplate struct {
+	ID        uuid.UUID          `gorm:"type:uuid;primaryKey"`
+	Category  IncidentCategory   `gorm:"size:64;uniqueIndex;not null"`
+	Payload   RCATemplatePayload `gorm:"serializer:json"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (t *RCATemplate) BeforeCreate(tx *gorm.DB) error {
+	assignID(&t.ID)
+	return nil
+}
+
+type NotificationPreference struct {
+	ID           uuid.UUID        `gorm:"type:uuid;primaryKey"`
+	UserID       uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex:idx_notif_pref_user_event"`
+	EventType    NotificationType `gorm:"size:64;not null;uniqueIndex:idx_notif_pref_user_event"`
+	EmailEnabled bool             `gorm:"not null;default:false"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+
+	User User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (p *NotificationPreference) BeforeCreate(tx *gorm.DB) error {
+	assignID(&p.ID)
 	return nil
 }
 

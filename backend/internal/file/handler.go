@@ -89,7 +89,16 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		uploads = append(uploads, Upload{Name: fh.Filename, Content: b})
 	}
-	rows, err := h.Service.Upload(r.Context(), id, uploads, actor, httputil.ClientIP(r))
+	var caID *uuid.UUID
+	if raw := r.FormValue("correctiveActionId"); raw != "" {
+		parsed, err := uuid.Parse(raw)
+		if err != nil {
+			_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid correctiveActionId")
+			return
+		}
+		caID = &parsed
+	}
+	rows, err := h.Service.Upload(r.Context(), id, uploads, actor, httputil.ClientIP(r), caID)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -97,12 +106,13 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, map[string]any{
-			"id":           row.ID,
-			"originalName": row.OriginalName,
-			"storedKey":    row.StoredKey,
-			"mimeType":     row.MimeType,
-			"sizeBytes":    row.SizeBytes,
-			"context":      row.Context,
+			"id":                 row.ID,
+			"originalName":       row.OriginalName,
+			"storedKey":          row.StoredKey,
+			"mimeType":           row.MimeType,
+			"sizeBytes":          row.SizeBytes,
+			"context":            row.Context,
+			"correctiveActionId": row.CorrectiveActionID,
 		})
 	}
 	_ = response.Success(w, http.StatusCreated, out)

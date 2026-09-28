@@ -15,6 +15,9 @@ const (
 	IncidentsReject Permission = "incidents:reject"
 	IncidentsClose  Permission = "incidents:close"
 	FilesWrite      Permission = "files:write"
+	RCAWrite        Permission = "rca:write"
+	CAWrite         Permission = "corrective_actions:write"
+	CAVerify        Permission = "corrective_actions:verify"
 )
 
 var allPermissions = []Permission{
@@ -28,6 +31,9 @@ var allPermissions = []Permission{
 	IncidentsReject,
 	IncidentsClose,
 	FilesWrite,
+	RCAWrite,
+	CAWrite,
+	CAVerify,
 }
 
 func AllPermissions() []Permission {
@@ -59,6 +65,8 @@ func Has(role database.Role, perm Permission) bool {
 		return role == database.RoleSupervisor || role == database.RoleHSEOfficer || role == database.RoleHSEManager
 	case IncidentsClose:
 		return role == database.RoleHSEManager
+	case RCAWrite, CAWrite, CAVerify:
+		return role == database.RoleHSEOfficer || role == database.RoleHSEManager
 	default:
 		return false
 	}

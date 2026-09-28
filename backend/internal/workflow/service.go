@@ -11,15 +11,24 @@ import (
 	"aegis/internal/incscope"
 	"aegis/pkg/authctx"
 	"aegis/pkg/database"
+	"aegis/pkg/notifier"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+type EventSink interface {
+	OnVerified(ctx context.Context, inc database.Incident, loc database.Location)
+	OnRejected(ctx context.Context, inc database.Incident, loc database.Location)
+	OnClosed(ctx context.Context, inc database.Incident, loc database.Location)
+}
+
 type Service struct {
-	DB    *gorm.DB
-	Audit auditlog.Writer
-	Now   func() time.Time
+	DB        *gorm.DB
+	Audit     auditlog.Writer
+	Notify    EventSink
+	Emergency notifier.EmergencyNotifier
+	Now       func() time.Time
 }
 
 func (s *Service) now() time.Time {
@@ -57,11 +66,24 @@ func (s *Service) Close(ctx context.Context, id uuid.UUID, actor authctx.Princip
 	if inc.Status != database.StatusUnderInvestigation && inc.Status != database.StatusCorrectiveAction {
 		return database.Incident{}, incident.WrapIllegal("illegal status transition")
 	}
-	return s.apply(ctx, inc, actor, ip, comment, database.StatusClosed, database.AuditClosed, func(row *database.Incident) {
+	var pending int64
+	if err := s.DB.Model(&database.CorrectiveAction{}).
+		Where("incident_id = ? AND status <> ?", inc.ID, database.CAStatusVerified).
+		Count(&pending).Error; err != nil {
+		return database.Incident{}, err
+	}
+	if pending > 0 {
+		return database.Incident{}, incident.WrapIllegal("all corrective actions must be verified before close")
+	}
+	row, err := s.apply(ctx, inc, actor, ip, comment, database.StatusClosed, database.AuditClosed, func(row *database.Incident) {
 		now := s.now()
 		row.ClosedAt = &now
 		row.ClosedByID = &actor.ID
 	})
+	if err == nil && s.Notify != nil {
+		s.Notify.OnClosed(ctx, row, loc)
+	}
+	return row, err
 }
 
 func (s *Service) StartCorrectiveAction(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip, comment string) (database.Incident, error) {
@@ -124,7 +146,22 @@ func (s *Service) transition(ctx context.Context, id uuid.UUID, actor authctx.Pr
 	if inc.Status != from {
 		return database.Incident{}, incident.WrapIllegal("illegal status transition")
 	}
-	return s.apply(ctx, inc, actor, ip, comment, to, action, nil)
+	row, err := s.apply(ctx, inc, actor, ip, comment, to, action, nil)
+	if err != nil {
+		return database.Incident{}, err
+	}
+	if s.Notify != nil {
+		switch to {
+		case database.StatusUnderInvestigation:
+			s.Notify.OnVerified(ctx, row, loc)
+		case database.StatusRejected:
+			s.Notify.OnRejected(ctx, row, loc)
+		}
+	}
+	if to == database.StatusUnderInvestigation && row.Category == database.CategoryFatality && s.Emergency != nil {
+		_ = s.Emergency.NotifyFatality(ctx, row.ID, row.Title)
+	}
+	return row, nil
 }
 
 func (s *Service) apply(ctx context.Context, inc database.Incident, actor authctx.Principal, ip, comment string, to database.IncidentStatus, action database.AuditAction, extra func(*database.Incident)) (database.Incident, error) {
