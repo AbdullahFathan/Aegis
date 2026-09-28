@@ -103,6 +103,9 @@ func (h *Handler) maybePDF(w http.ResponseWriter, r *http.Request, typ database.
 // @Param        format  query     string  false  "json|csv|pdf"
 // @Success      200     {object}  response.Envelope
 // @Success      202     {object}  response.Envelope
+// @Failure      401     {object}  response.Envelope
+// @Failure      403     {object}  response.Envelope
+// @Failure      422     {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports/monthly [get]
 func (h *Handler) Monthly(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +139,8 @@ func (h *Handler) Monthly(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        format  query     string  false  "json|csv|pdf"
 // @Success      200     {object}  response.Envelope
+// @Failure      401     {object}  response.Envelope
+// @Failure      403     {object}  response.Envelope
 // @Failure      422     {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports/ltifr [get]
@@ -170,6 +175,9 @@ func (h *Handler) LTIFR(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        format  query     string  false  "json|csv|pdf"
 // @Success      200     {object}  response.Envelope
+// @Failure      401     {object}  response.Envelope
+// @Failure      403     {object}  response.Envelope
+// @Failure      422     {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports/corrective-actions [get]
 func (h *Handler) CorrectiveActions(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +211,9 @@ func (h *Handler) CorrectiveActions(w http.ResponseWriter, r *http.Request) {
 // @Param        id      path      string  true  "incident id"
 // @Param        format  query     string  false  "pdf"
 // @Success      202     {object}  response.Envelope
+// @Failure      401     {object}  response.Envelope
+// @Failure      403     {object}  response.Envelope
+// @Failure      422     {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports/investigation/{id} [get]
 func (h *Handler) Investigation(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +248,9 @@ func (h *Handler) Investigation(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "job id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports/jobs/{id} [get]
 func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +283,8 @@ func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 // @Tags         reports
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /reports [get]
 func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
@@ -297,6 +313,9 @@ type workHoursBody struct {
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /work-hours [put]
 func (h *Handler) PutWorkHours(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +356,9 @@ func (h *Handler) PutWorkHours(w http.ResponseWriter, r *http.Request) {
 // @Tags         reports
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /work-hours [get]
 func (h *Handler) ListWorkHours(w http.ResponseWriter, r *http.Request) {

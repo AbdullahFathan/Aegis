@@ -53,6 +53,7 @@ func parseFilter(r *http.Request) (Filter, error) {
 // @Success      200         {object}  response.Envelope
 // @Failure      401         {object}  response.Envelope
 // @Failure      403         {object}  response.Envelope
+// @Failure      422         {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /dashboard/summary [get]
 func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +75,9 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 // @Tags         dashboard
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /dashboard/trends [get]
 func (h *Handler) Trends(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +99,9 @@ func (h *Handler) Trends(w http.ResponseWriter, r *http.Request) {
 // @Tags         dashboard
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /dashboard/heatmap [get]
 func (h *Handler) Heatmap(w http.ResponseWriter, r *http.Request) {

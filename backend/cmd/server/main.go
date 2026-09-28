@@ -2,7 +2,7 @@
 //
 //	@title			Aegis API
 //	@version		1.0
-//	@description	K3 incident reporting backend (Phase 4: dashboard, reports, audit).
+//	@description	K3 incident reporting and compliance API (MVP).
 //	@BasePath		/
 //
 //	@securityDefinitions.apikey	BearerAuth

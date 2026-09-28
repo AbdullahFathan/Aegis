@@ -27,6 +27,7 @@ type prefBody struct {
 // @Tags         notifications
 // @Produce      json
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /notifications [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +63,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // @Tags         notifications
 // @Param        id   path  string  true  "id"
 // @Success      204
+// @Failure      401  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /notifications/{id}/read [patch]
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +92,8 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        request  body      prefBody  true  "preference"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
+// @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /notifications/preferences [put]
 func (h *Handler) PutPreference(w http.ResponseWriter, r *http.Request) {

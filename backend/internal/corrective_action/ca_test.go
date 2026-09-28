@@ -9,6 +9,7 @@ import (
 	"aegis/internal/auth"
 	correctiveaction "aegis/internal/corrective_action"
 	"aegis/internal/incident"
+	"aegis/internal/notification"
 	"aegis/pkg/authctx"
 	"aegis/pkg/database"
 
@@ -133,6 +134,30 @@ func TestOverdueClock(t *testing.T) {
 	var fresh database.CorrectiveAction
 	require.NoError(t, db.First(&fresh, "id = ?", future.ID).Error)
 	require.Equal(t, database.CAStatusOpen, fresh.Status)
+}
+
+func TestRunOverdueJobNotifies(t *testing.T) {
+	db := testDB(t)
+	inc, rep, off, _, _ := seed(t, db)
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	svc := &correctiveaction.Service{
+		DB: db, Audit: auditlog.Noop{},
+		Jobs: &notification.Service{DB: db, Once: &notification.MemoryOnce{}},
+		Once: &notification.MemoryOnce{},
+	}
+	actor := authctx.Principal{ID: off.ID, Role: off.Role}
+	_, err := svc.Create(context.Background(), inc.ID, correctiveaction.CreateInput{
+		Description: "past", ActionType: database.ActionImmediate, Priority: database.PriorityLow,
+		AssigneeID: rep.ID, DueDate: now.Add(-24 * time.Hour),
+	}, actor, "ip")
+	require.NoError(t, err)
+	_, err = svc.Create(context.Background(), inc.ID, correctiveaction.CreateInput{
+		Description: "soon", ActionType: database.ActionImmediate, Priority: database.PriorityLow,
+		AssigneeID: rep.ID, DueDate: now.Add(24 * time.Hour),
+	}, actor, "ip")
+	require.NoError(t, err)
+	require.NoError(t, svc.RunOverdueJob(context.Background(), now))
+	require.NoError(t, svc.RunOverdueJob(context.Background(), now))
 }
 
 func TestTrackerHidesOtherSite(t *testing.T) {

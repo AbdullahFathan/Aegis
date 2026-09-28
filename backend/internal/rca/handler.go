@@ -43,7 +43,10 @@ type templateBody struct {
 // @Produce      json
 // @Param        id   path      string  true  "incident id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
 // @Failure      404  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/rca [get]
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +70,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string      true  "incident id"
 // @Param        request  body      upsertBody  true  "rca"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
@@ -98,9 +102,11 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 // @Tags         rca
 // @Produce      json
 // @Param        category  path      string  true  "incident category"
-// @Success      200       {object}  response.Envelope
-// @Security     BearerAuth
-// @Router       /rca-templates/{category} [get]
+// @Success       200       {object}  response.Envelope
+// @Failure       401       {object}  response.Envelope
+// @Failure       403       {object}  response.Envelope
+// @Security      BearerAuth
+// @Router        /rca-templates/{category} [get]
 func (h *Handler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	cat := database.IncidentCategory(chi.URLParam(r, "category"))
 	row, err := h.Service.GetTemplate(cat)
@@ -119,7 +125,9 @@ func (h *Handler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 // @Param        category  path      string        true  "incident category"
 // @Param        request   body      templateBody  true  "template"
 // @Success      200       {object}  response.Envelope
+// @Failure      401       {object}  response.Envelope
 // @Failure      403       {object}  response.Envelope
+// @Failure      422       {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /rca-templates/{category} [put]
 func (h *Handler) PutTemplate(w http.ResponseWriter, r *http.Request) {

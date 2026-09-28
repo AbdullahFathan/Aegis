@@ -54,7 +54,9 @@ func decodeComment(r *http.Request) (string, error) {
 // @Param        id       path      string       true  "id"
 // @Param        request  body      commentBody  false "comment"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
+// @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/verify [post]
 func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +81,8 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string       true  "id"
 // @Param        request  body      commentBody  true  "comment"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
+// @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/reject [post]
@@ -107,6 +111,7 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
 // @Failure      403  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/close [post]
@@ -130,6 +135,9 @@ func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/start-corrective-action [post]
 func (h *Handler) StartCorrectiveAction(w http.ResponseWriter, r *http.Request) {
@@ -152,6 +160,9 @@ func (h *Handler) StartCorrectiveAction(w http.ResponseWriter, r *http.Request) 
 // @Produce      json
 // @Param        id   path      string  true  "id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/timeline [get]
 func (h *Handler) Timeline(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,9 @@ type patchBody struct {
 // @Produce      json
 // @Param        id   path      string  true  "incident id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/corrective-actions [get]
 func (h *Handler) ListByIncident(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +69,7 @@ func (h *Handler) ListByIncident(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string      true  "incident id"
 // @Param        request  body      createBody  true  "ca"
 // @Success      201      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
@@ -112,6 +116,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string     true  "ca id"
 // @Param        request  body      patchBody  true  "patch"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
+// @Failure      403      {object}  response.Envelope
+// @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /corrective-actions/{id} [patch]
 func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +174,7 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "ca id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
 // @Failure      403  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /corrective-actions/{id}/verify [post]
@@ -192,6 +200,9 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 // @Param        priority    query     string  false  "priority"
 // @Param        locationId  query     string  false  "location"
 // @Success      200         {object}  response.Envelope
+// @Failure      401         {object}  response.Envelope
+// @Failure      403         {object}  response.Envelope
+// @Failure      422         {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /corrective-actions [get]
 func (h *Handler) Tracker(w http.ResponseWriter, r *http.Request) {

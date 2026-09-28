@@ -7,6 +7,58 @@ definitions:
       password:
         type: string
     type: object
+  correctiveaction.createBody:
+    properties:
+      actionType:
+        type: string
+      assigneeId:
+        type: string
+      description:
+        type: string
+      dueDate:
+        type: string
+      priority:
+        type: string
+    type: object
+  correctiveaction.patchBody:
+    properties:
+      actionType:
+        type: string
+      assigneeId:
+        type: string
+      completionNotes:
+        type: string
+      description:
+        type: string
+      dueDate:
+        type: string
+      priority:
+        type: string
+      status:
+        type: string
+    type: object
+  database.Fishbone:
+    properties:
+      environment:
+        type: string
+      machine:
+        type: string
+      man:
+        type: string
+      material:
+        type: string
+      measurement:
+        type: string
+      method:
+        type: string
+    type: object
+  database.FiveWhy:
+    properties:
+      answer:
+        type: string
+      why:
+        type: string
+    type: object
   database.Witness:
     properties:
       name:
@@ -109,6 +161,49 @@ definitions:
       name:
         type: string
     type: object
+  notification.prefBody:
+    properties:
+      emailEnabled:
+        type: boolean
+      eventType:
+        type: string
+    type: object
+  rca.templateBody:
+    properties:
+      environmentFactor:
+        type: string
+      equipmentFactor:
+        type: string
+      fishbone:
+        $ref: '#/definitions/database.Fishbone'
+      fiveWhys:
+        items:
+          $ref: '#/definitions/database.FiveWhy'
+        type: array
+      humanFactor:
+        type: string
+      timeline:
+        type: string
+    type: object
+  rca.upsertBody:
+    properties:
+      completed:
+        type: boolean
+      environmentFactor:
+        type: string
+      equipmentFactor:
+        type: string
+      fishbone:
+        $ref: '#/definitions/database.Fishbone'
+      fiveWhys:
+        items:
+          $ref: '#/definitions/database.FiveWhy'
+        type: array
+      humanFactor:
+        type: string
+      timeline:
+        type: string
+    type: object
   response.Envelope:
     properties:
       data: {}
@@ -153,10 +248,61 @@ definitions:
     type: object
 info:
   contact: {}
-  description: 'K3 incident reporting backend (Phase 2: incidents, workflow, files).'
+  description: K3 incident reporting and compliance API (MVP).
   title: Aegis API
   version: "1.0"
 paths:
+  /audit-logs:
+    get:
+      parameters:
+      - description: json|csv
+        in: query
+        name: format
+        type: string
+      - description: RFC3339
+        in: query
+        name: from
+        type: string
+      - description: RFC3339
+        in: query
+        name: to
+        type: string
+      - description: user id
+        in: query
+        name: userId
+        type: string
+      - description: entity type
+        in: query
+        name: entityType
+        type: string
+      - description: action
+        in: query
+        name: action
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List audit logs
+      tags:
+      - audit-logs
   /auth/login:
     post:
       consumes:
@@ -236,6 +382,212 @@ paths:
       summary: Refresh access token
       tags:
       - auth
+  /corrective-actions:
+    get:
+      parameters:
+      - description: status
+        in: query
+        name: status
+        type: string
+      - description: assignee
+        in: query
+        name: assigneeId
+        type: string
+      - description: priority
+        in: query
+        name: priority
+        type: string
+      - description: location
+        in: query
+        name: locationId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List corrective actions across incidents
+      tags:
+      - corrective-actions
+  /corrective-actions/{id}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ca id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: patch
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/correctiveaction.patchBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Update corrective action
+      tags:
+      - corrective-actions
+  /corrective-actions/{id}/verify:
+    post:
+      parameters:
+      - description: ca id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Verify completed corrective action
+      tags:
+      - corrective-actions
+  /dashboard/heatmap:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Heatmap site x category
+      tags:
+      - dashboard
+  /dashboard/summary:
+    get:
+      parameters:
+      - description: RFC3339
+        in: query
+        name: from
+        type: string
+      - description: RFC3339
+        in: query
+        name: to
+        type: string
+      - description: location id
+        in: query
+        name: locationId
+        type: string
+      - description: category
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Dashboard KPI summary
+      tags:
+      - dashboard
+  /dashboard/trends:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Incident trends 12 months
+      tags:
+      - dashboard
   /incidents:
     get:
       parameters:
@@ -278,6 +630,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
       security:
       - BearerAuth: []
       summary: List incidents
@@ -304,6 +660,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "422":
           description: Unprocessable Entity
           schema:
@@ -328,8 +688,20 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -357,6 +729,10 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/response.Envelope'
         "403":
@@ -389,6 +765,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "403":
           description: Forbidden
           schema:
@@ -398,6 +778,77 @@ paths:
       summary: Close incident
       tags:
       - workflow
+  /incidents/{id}/corrective-actions:
+    get:
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List corrective actions for an incident
+      tags:
+      - corrective-actions
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ca
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/correctiveaction.createBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Create corrective action
+      tags:
+      - corrective-actions
   /incidents/{id}/files:
     get:
       parameters:
@@ -411,6 +862,18 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -439,6 +902,14 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "422":
           description: Unprocessable Entity
           schema:
@@ -464,6 +935,14 @@ paths:
       responses:
         "204":
           description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "422":
           description: Unprocessable Entity
           schema:
@@ -473,6 +952,81 @@ paths:
       summary: Delete draft incident file
       tags:
       - files
+  /incidents/{id}/rca:
+    get:
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Get RCA for incident
+      tags:
+      - rca
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: rca
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/rca.upsertBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Create or update RCA
+      tags:
+      - rca
   /incidents/{id}/reject:
     post:
       consumes:
@@ -494,6 +1048,14 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/response.Envelope'
         "422":
@@ -520,6 +1082,18 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
       security:
       - BearerAuth: []
       summary: Move incident to corrective action (P2 stub)
@@ -540,12 +1114,20 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "403":
           description: Forbidden
           schema:
             $ref: '#/definitions/response.Envelope'
         "409":
           description: Conflict
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -566,6 +1148,18 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -595,8 +1189,16 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "403":
           description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -639,6 +1241,10 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "403":
           description: Forbidden
           schema:
@@ -671,8 +1277,20 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -700,6 +1318,14 @@ paths:
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/response.Envelope'
         "404":
@@ -730,8 +1356,16 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Envelope'
       security:
@@ -761,6 +1395,14 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "404":
           description: Not Found
           schema:
@@ -774,6 +1416,146 @@ paths:
       summary: Create area
       tags:
       - locations
+  /notifications:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List my notifications
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    patch:
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Mark notification read
+      tags:
+      - notifications
+  /notifications/preferences:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: preference
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/notification.prefBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Set email preference for an event type
+      tags:
+      - notifications
+  /rca-templates/{category}:
+    get:
+      parameters:
+      - description: incident category
+        in: path
+        name: category
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Get RCA template by category
+      tags:
+      - rca
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: incident category
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: template
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/rca.templateBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Save RCA template by category
+      tags:
+      - rca
   /regions:
     get:
       produces:
@@ -809,6 +1591,10 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
         "403":
           description: Forbidden
           schema:
@@ -822,6 +1608,191 @@ paths:
       summary: Create region
       tags:
       - locations
+  /reports:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List archived generated reports
+      tags:
+      - reports
+  /reports/corrective-actions:
+    get:
+      parameters:
+      - description: json|csv|pdf
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Corrective action status report
+      tags:
+      - reports
+  /reports/investigation/{id}:
+    get:
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: pdf
+        in: query
+        name: format
+        type: string
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Investigation report PDF
+      tags:
+      - reports
+  /reports/jobs/{id}:
+    get:
+      parameters:
+      - description: job id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Poll generated report job
+      tags:
+      - reports
+  /reports/ltifr:
+    get:
+      parameters:
+      - description: json|csv|pdf
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: LTIFR and TRIFR
+      tags:
+      - reports
+  /reports/monthly:
+    get:
+      parameters:
+      - description: json|csv|pdf
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Monthly incident recap
+      tags:
+      - reports
   /users:
     get:
       parameters:
@@ -943,6 +1914,59 @@ paths:
       summary: Update user
       tags:
       - users
+  /work-hours:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List work hours rows
+      tags:
+      - reports
+    put:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Upsert work hours for a period
+      tags:
+      - reports
 securityDefinitions:
   BearerAuth:
     in: header

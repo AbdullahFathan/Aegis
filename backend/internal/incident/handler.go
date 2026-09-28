@@ -68,6 +68,7 @@ type patchBody struct {
 // @Param        pageSize    query     int     false  "page size"
 // @Success      200         {object}  response.Envelope
 // @Failure      401         {object}  response.Envelope
+// @Failure      403         {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +137,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // @Param        request  body      createBody  true  "incident"
 // @Success      201      {object}  response.Envelope
 // @Failure      401      {object}  response.Envelope
+// @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents [post]
@@ -191,7 +193,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
 // @Failure      404  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id} [get]
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
@@ -221,6 +226,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string     true  "id"
 // @Param        request  body      patchBody  true  "fields"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
@@ -296,8 +302,10 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
 // @Failure      403  {object}  response.Envelope
 // @Failure      409  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/submit [post]
 func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {

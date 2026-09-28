@@ -128,3 +128,48 @@ func TestTrendsAndHeatmapFilterSite(t *testing.T) {
 		require.Equal(t, locA.ID.String(), c.LocationID)
 	}
 }
+
+func BenchmarkDashboardSummary(b *testing.B) {
+	auth.SetBcryptCost(bcrypt.MinCost)
+	db, err := database.OpenSQLite("file:bench-summary?mode=memory&cache=shared")
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := database.AutoMigrate(db); err != nil {
+		b.Fatal(err)
+	}
+	sup := database.User{Email: "s@example.com", PasswordHash: "x", Name: "s", Role: database.RoleSupervisor, Status: database.UserStatusActive}
+	off := database.User{Email: "o@example.com", PasswordHash: "x", Name: "o", Role: database.RoleHSEOfficer, Status: database.UserStatusActive}
+	rep := database.User{Email: "r@example.com", PasswordHash: "x", Name: "r", Role: database.RoleReporter, Status: database.UserStatusActive}
+	if err := db.Create(&sup).Error; err != nil {
+		b.Fatal(err)
+	}
+	if err := db.Create(&off).Error; err != nil {
+		b.Fatal(err)
+	}
+	if err := db.Create(&rep).Error; err != nil {
+		b.Fatal(err)
+	}
+	loc := database.Location{Name: "A", Code: "TMB-A", Type: database.LocationTambang, SupervisorID: sup.ID, HSEOfficerID: off.ID, IsActive: true}
+	if err := db.Create(&loc).Error; err != nil {
+		b.Fatal(err)
+	}
+	when := time.Date(2026, 9, 2, 8, 0, 0, 0, time.UTC)
+	for i := 0; i < 50; i++ {
+		row := database.Incident{
+			Title: "Slip", Description: "Worker slipped on wet surface near loading area during morning shift.",
+			Category: database.CategoryNearMiss, Severity: database.SeverityLow, EscalationLevel: database.EscalationL1,
+			Status: database.StatusPendingReview, IncidentDatetime: when, LocationID: loc.ID, ReporterID: rep.ID,
+		}
+		if err := db.Create(&row).Error; err != nil {
+			b.Fatal(err)
+		}
+	}
+	svc := &dashboard.Service{DB: db, Now: func() time.Time { return time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC) }}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := svc.Summary(dashboard.Filter{}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

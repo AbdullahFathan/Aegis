@@ -23,6 +23,9 @@ type Handler struct {
 // @Produce      json
 // @Param        id   path      string  true  "incident id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/files [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +55,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // @Param        id     path      string  true  "incident id"
 // @Param        files  formData  file    true  "files"
 // @Success      201    {object}  response.Envelope
+// @Failure      401    {object}  response.Envelope
+// @Failure      403    {object}  response.Envelope
 // @Failure      422    {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/files [post]
@@ -124,6 +129,8 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 // @Param        id      path  string  true  "incident id"
 // @Param        fileId  path  string  true  "file id"
 // @Success      204
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
 // @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /incidents/{id}/files/{fileId} [delete]

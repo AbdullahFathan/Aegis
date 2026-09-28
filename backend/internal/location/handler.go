@@ -91,6 +91,7 @@ func (h *Handler) ListRegions(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        request  body      regionBody  true  "region"
 // @Success      201      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
@@ -138,6 +139,7 @@ func (h *Handler) ListLocations(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        request  body      locationBody  true  "location"
 // @Success      201      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      409      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
@@ -171,6 +173,8 @@ func (h *Handler) CreateLocation(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string        true  "location id"
 // @Param        request  body      locationBody  true  "fields"
 // @Success      200      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
+// @Failure      403      {object}  response.Envelope
 // @Failure      404      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth
@@ -206,7 +210,10 @@ func (h *Handler) PatchLocation(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "location id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
+// @Failure      403  {object}  response.Envelope
 // @Failure      404  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /locations/{id} [delete]
 func (h *Handler) DeleteLocation(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +237,9 @@ func (h *Handler) DeleteLocation(w http.ResponseWriter, r *http.Request) {
 // @Produce      json
 // @Param        id   path      string  true  "location id"
 // @Success      200  {object}  response.Envelope
+// @Failure      401  {object}  response.Envelope
 // @Failure      404  {object}  response.Envelope
+// @Failure      422  {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /locations/{id}/areas [get]
 func (h *Handler) ListAreas(w http.ResponseWriter, r *http.Request) {
@@ -259,6 +268,8 @@ func (h *Handler) ListAreas(w http.ResponseWriter, r *http.Request) {
 // @Param        id       path      string    true  "location id"
 // @Param        request  body      areaBody  true  "area"
 // @Success      201      {object}  response.Envelope
+// @Failure      401      {object}  response.Envelope
+// @Failure      403      {object}  response.Envelope
 // @Failure      404      {object}  response.Envelope
 // @Failure      422      {object}  response.Envelope
 // @Security     BearerAuth

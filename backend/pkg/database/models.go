@@ -170,9 +170,9 @@ type Incident struct {
 	Category          IncidentCategory `gorm:"size:64;not null;index"`
 	Severity          Severity         `gorm:"size:32;not null"`
 	EscalationLevel   EscalationLevel  `gorm:"size:8;not null"`
-	Status            IncidentStatus   `gorm:"size:32;not null;index"`
-	IncidentDatetime  time.Time        `gorm:"not null;index"`
-	LocationID        uuid.UUID        `gorm:"type:uuid;not null;index"`
+	Status            IncidentStatus   `gorm:"size:32;not null;index;index:idx_incident_status_location_time,priority:1"`
+	IncidentDatetime  time.Time        `gorm:"not null;index;index:idx_incident_status_location_time,priority:3"`
+	LocationID        uuid.UUID        `gorm:"type:uuid;not null;index;index:idx_incident_status_location_time,priority:2"`
 	AreaID            *uuid.UUID       `gorm:"type:uuid;index"`
 	ReporterID        uuid.UUID        `gorm:"type:uuid;not null;index"`
 	HasVictim         bool             `gorm:"not null"`

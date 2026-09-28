@@ -86,7 +86,9 @@ type Handler struct {
 // @Param        entityType  query     string  false  "entity type"
 // @Param        action      query     string  false  "action"
 // @Success      200         {object}  response.Envelope
+// @Failure      401         {object}  response.Envelope
 // @Failure      403         {object}  response.Envelope
+// @Failure      422         {object}  response.Envelope
 // @Security     BearerAuth
 // @Router       /audit-logs [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {

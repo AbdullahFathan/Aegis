@@ -69,6 +69,9 @@ CREATE TABLE IF NOT EXISTS incidents (
     deleted_at TIMESTAMPTZ
 );
 
+CREATE INDEX IF NOT EXISTS idx_incident_status_location_time
+    ON incidents (status, location_id, incident_datetime);
+
 CREATE TABLE IF NOT EXISTS incident_workflow_logs (
     id UUID PRIMARY KEY,
     incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,

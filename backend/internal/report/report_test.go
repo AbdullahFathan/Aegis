@@ -16,6 +16,7 @@ import (
 	aegispdf "aegis/pkg/pdf"
 	"aegis/pkg/storage"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -192,4 +193,17 @@ func TestOfficerCannotSeeOtherSiteMonthly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, locA.ID, items[0].LocationID)
+}
+
+func TestRedisQueueNilClientAndRecordable(t *testing.T) {
+	var q report.RedisQueue
+	require.NoError(t, q.Enqueue(context.Background(), uuid.Nil))
+	ids, err := q.Pop(context.Background(), 0)
+	require.NoError(t, err)
+	require.Nil(t, ids)
+	ids, err = q.Pop(context.Background(), 1)
+	require.NoError(t, err)
+	require.Nil(t, ids)
+	require.True(t, report.IsRecordable(database.CategoryLTI))
+	require.False(t, report.IsRecordable(database.CategoryNearMiss))
 }
