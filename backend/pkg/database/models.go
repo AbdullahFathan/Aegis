@@ -362,6 +362,7 @@ const (
 	NotifCAAssigned        NotificationType = "CA_ASSIGNED"
 	NotifCADueSoon         NotificationType = "CA_DUE_SOON"
 	NotifCAOverdue         NotificationType = "CA_OVERDUE"
+	NotifReportReady       NotificationType = "REPORT_READY"
 )
 
 type NotificationPriority string
@@ -460,5 +461,65 @@ type AuditLog struct {
 
 func (a *AuditLog) BeforeCreate(tx *gorm.DB) error {
 	assignID(&a.ID)
+	return nil
+}
+
+type WorkHours struct {
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	LocationID  *uuid.UUID `gorm:"type:uuid;index"`
+	PeriodStart time.Time  `gorm:"not null;index"`
+	PeriodEnd   time.Time  `gorm:"not null"`
+	Hours       float64    `gorm:"not null"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+
+	Location *Location `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+}
+
+func (w *WorkHours) BeforeCreate(tx *gorm.DB) error {
+	assignID(&w.ID)
+	return nil
+}
+
+type ReportType string
+
+const (
+	ReportMonthly       ReportType = "MONTHLY"
+	ReportInvestigation ReportType = "INVESTIGATION"
+	ReportLTIFR         ReportType = "LTIFR"
+	ReportCAStatus      ReportType = "CA_STATUS"
+)
+
+type ReportFormat string
+
+const (
+	ReportFormatPDF ReportFormat = "PDF"
+)
+
+type ReportJobStatus string
+
+const (
+	ReportPending ReportJobStatus = "PENDING"
+	ReportDone    ReportJobStatus = "DONE"
+	ReportFailed  ReportJobStatus = "FAILED"
+)
+
+type GeneratedReport struct {
+	ID            uuid.UUID       `gorm:"type:uuid;primaryKey"`
+	Type          ReportType      `gorm:"size:32;not null;index"`
+	Format        ReportFormat    `gorm:"size:8;not null"`
+	Status        ReportJobStatus `gorm:"size:16;not null;index"`
+	Params        map[string]any  `gorm:"serializer:json"`
+	StoredKey     *string         `gorm:"size:512"`
+	ErrorMessage  *string         `gorm:"type:text"`
+	RequestedByID uuid.UUID       `gorm:"type:uuid;not null;index"`
+	CreatedAt     time.Time
+	CompletedAt   *time.Time
+
+	RequestedBy User `gorm:"foreignKey:RequestedByID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (g *GeneratedReport) BeforeCreate(tx *gorm.DB) error {
+	assignID(&g.ID)
 	return nil
 }

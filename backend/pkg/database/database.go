@@ -49,6 +49,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&NotificationPreference{},
 		&RCATemplate{},
 		&AuditLog{},
+		&WorkHours{},
+		&GeneratedReport{},
 	)
 }
 

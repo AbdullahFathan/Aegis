@@ -20,6 +20,8 @@ type Config struct {
 	JWTAccessTTL    time.Duration
 	JWTRefreshTTL   time.Duration
 	CookieSecure    bool
+	ReportTZ        string
+	CompanyName     string
 }
 
 func Load() Config {
@@ -36,6 +38,8 @@ func Load() Config {
 		JWTAccessTTL:    envDuration("JWT_ACCESS_TTL", 15*time.Minute),
 		JWTRefreshTTL:   envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
 		CookieSecure:    envBool("COOKIE_SECURE", false),
+		ReportTZ:        env("REPORT_TZ", "Asia/Jakarta"),
+		CompanyName:     env("COMPANY_NAME", "Aegis"),
 	}
 }
 

@@ -2,7 +2,7 @@
 //
 //	@title			Aegis API
 //	@version		1.0
-//	@description	K3 incident reporting backend (Phase 3: RCA, CA, notifications).
+//	@description	K3 incident reporting backend (Phase 4: dashboard, reports, audit).
 //	@BasePath		/
 //
 //	@securityDefinitions.apikey	BearerAuth
@@ -20,17 +20,20 @@ import (
 	"aegis/internal/auditlog"
 	"aegis/internal/auth"
 	correctiveaction "aegis/internal/corrective_action"
+	"aegis/internal/dashboard"
 	"aegis/internal/file"
 	"aegis/internal/incident"
 	"aegis/internal/location"
 	"aegis/internal/notification"
 	"aegis/internal/rca"
+	"aegis/internal/report"
 	"aegis/internal/user"
 	"aegis/internal/workflow"
 	"aegis/pkg/database"
 	"aegis/pkg/logger"
 	"aegis/pkg/middleware"
 	"aegis/pkg/notifier"
+	aegispdf "aegis/pkg/pdf"
 	"aegis/pkg/rbac"
 	"aegis/pkg/redisx"
 	"aegis/pkg/response"
@@ -140,6 +143,17 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
 	}
 	fileH := &file.Handler{Service: &file.Service{Repo: incRepo, Store: store, Audit: audit}}
+	tz, err := time.LoadLocation(cfg.ReportTZ)
+	if err != nil {
+		tz = time.UTC
+	}
+	dashH := &dashboard.Handler{Service: &dashboard.Service{DB: db}}
+	repSvc := &report.Service{
+		DB: db, Queue: report.RedisQueue{Client: rdb}, Store: store, PDF: aegispdf.Fpdf{},
+		Notify: notifSvc, Once: notification.RedisOnce{Client: rdb}, TZ: tz, CompanyName: cfg.CompanyName,
+	}
+	repH := &report.Handler{Service: repSvc}
+	auditH := &auditlog.Handler{Repo: audit}
 
 	r.With(middleware.LoginRateLimit(limiter)).Post("/auth/login", authH.Login)
 	r.Post("/auth/refresh", authH.Refresh)
@@ -190,6 +204,21 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 		ar.Get("/notifications", notifH.List)
 		ar.Patch("/notifications/{id}/read", notifH.MarkRead)
 		ar.Put("/notifications/preferences", notifH.PutPreference)
+
+		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/summary", dashH.Summary)
+		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/trends", dashH.Trends)
+		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/heatmap", dashH.Heatmap)
+
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/monthly", repH.Monthly)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/ltifr", repH.LTIFR)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/corrective-actions", repH.CorrectiveActions)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/investigation/{id}", repH.Investigation)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/jobs/{id}", repH.Job)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports", repH.Archive)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Put("/work-hours", repH.PutWorkHours)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Get("/work-hours", repH.ListWorkHours)
+
+		ar.With(middleware.RequirePermission(rbac.AuditLogsRead)).Get("/audit-logs", auditH.List)
 	})
 
 	return r

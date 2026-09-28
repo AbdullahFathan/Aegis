@@ -10,10 +10,13 @@ import (
 	"aegis/config"
 	correctiveaction "aegis/internal/corrective_action"
 	"aegis/internal/notification"
+	"aegis/internal/report"
 	"aegis/pkg/database"
 	"aegis/pkg/logger"
 	"aegis/pkg/notifier"
+	aegispdf "aegis/pkg/pdf"
 	"aegis/pkg/redisx"
+	"aegis/pkg/storage"
 
 	"go.uber.org/zap"
 )
@@ -49,6 +52,19 @@ func main() {
 	}
 	caJobs := &correctiveaction.Service{DB: db, Jobs: notif, Once: once}
 
+	var store storage.ObjectStore = storage.NewMemory()
+	if cfg.RustFSAccessKey != "" && cfg.RustFSSecretKey != "" {
+		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	}
+	tz, err := time.LoadLocation(cfg.ReportTZ)
+	if err != nil {
+		tz = time.UTC
+	}
+	reports := &report.Service{
+		DB: db, Queue: report.RedisQueue{Client: rdb}, Store: store, PDF: aegispdf.Fpdf{},
+		Notify: notif, Once: once, TZ: tz, CompanyName: cfg.CompanyName,
+	}
+
 	log.Info("worker_started", zap.String("mode", "jobs"))
 
 	stop := make(chan os.Signal, 1)
@@ -70,6 +86,12 @@ func main() {
 		}
 		if err := notif.RunSLAReminders(ctx, now); err != nil {
 			log.Error("worker_sla_failed", zap.Error(err))
+		}
+		if err := reports.ProcessPending(ctx, 5); err != nil {
+			log.Error("worker_reports_failed", zap.Error(err))
+		}
+		if err := reports.RunMonthlySchedule(ctx, now); err != nil {
+			log.Error("worker_monthly_failed", zap.Error(err))
 		}
 	}
 	run()

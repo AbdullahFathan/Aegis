@@ -18,6 +18,9 @@ const (
 	RCAWrite        Permission = "rca:write"
 	CAWrite         Permission = "corrective_actions:write"
 	CAVerify        Permission = "corrective_actions:verify"
+	DashboardRead   Permission = "dashboard:read"
+	ReportsExport   Permission = "reports:export"
+	AuditLogsRead   Permission = "audit_logs:read"
 )
 
 var allPermissions = []Permission{
@@ -34,6 +37,9 @@ var allPermissions = []Permission{
 	RCAWrite,
 	CAWrite,
 	CAVerify,
+	DashboardRead,
+	ReportsExport,
+	AuditLogsRead,
 }
 
 func AllPermissions() []Permission {
@@ -67,6 +73,12 @@ func Has(role database.Role, perm Permission) bool {
 		return role == database.RoleHSEManager
 	case RCAWrite, CAWrite, CAVerify:
 		return role == database.RoleHSEOfficer || role == database.RoleHSEManager
+	case DashboardRead:
+		return role == database.RoleAdmin || role == database.RoleHSEManager
+	case ReportsExport:
+		return role == database.RoleAdmin || role == database.RoleHSEManager || role == database.RoleHSEOfficer
+	case AuditLogsRead:
+		return role == database.RoleAdmin
 	default:
 		return false
 	}
