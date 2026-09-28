@@ -203,6 +203,13 @@ func (i *Incident) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// IncidentNumberCounter allocates INC-YYYY-MM-XXXX sequentially per calendar month (UTC).
+type IncidentNumberCounter struct {
+	Year    int `gorm:"primaryKey"`
+	Month   int `gorm:"primaryKey"`
+	LastSeq int `gorm:"not null"`
+}
+
 type IncidentWorkflowLog struct {
 	ID         uuid.UUID      `gorm:"type:uuid;primaryKey"`
 	IncidentID uuid.UUID      `gorm:"type:uuid;not null;index"`

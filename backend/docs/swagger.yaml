@@ -7,6 +7,79 @@ definitions:
       password:
         type: string
     type: object
+  database.Witness:
+    properties:
+      name:
+        type: string
+      position:
+        type: string
+    type: object
+  incident.createBody:
+    properties:
+      areaId:
+        type: string
+      category:
+        type: string
+      description:
+        type: string
+      hasVictim:
+        type: boolean
+      incidentDatetime:
+        type: string
+      initialTreatment:
+        type: string
+      injuryDescription:
+        type: string
+      locationId:
+        type: string
+      severity:
+        type: string
+      title:
+        type: string
+      victimName:
+        type: string
+      victimPosition:
+        type: string
+      witnesses:
+        items:
+          $ref: '#/definitions/database.Witness'
+        type: array
+    type: object
+  incident.patchBody:
+    properties:
+      areaId:
+        type: string
+      category:
+        type: string
+      description:
+        type: string
+      hasVictim:
+        type: boolean
+      incidentDatetime:
+        type: string
+      initialTreatment:
+        type: string
+      injuryDescription:
+        type: string
+      locationId:
+        type: string
+      reason:
+        type: string
+      severity:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      victimName:
+        type: string
+      victimPosition:
+        type: string
+      witnesses:
+        items:
+          $ref: '#/definitions/database.Witness'
+        type: array
+    type: object
   location.areaBody:
     properties:
       code:
@@ -73,9 +146,14 @@ definitions:
       status:
         type: string
     type: object
+  workflow.commentBody:
+    properties:
+      comment:
+        type: string
+    type: object
 info:
   contact: {}
-  description: K3 incident reporting backend (Phase 1 skeleton).
+  description: 'K3 incident reporting backend (Phase 2: incidents, workflow, files).'
   title: Aegis API
   version: "1.0"
 paths:
@@ -158,6 +236,374 @@ paths:
       summary: Refresh access token
       tags:
       - auth
+  /incidents:
+    get:
+      parameters:
+      - description: status
+        in: query
+        name: status
+        type: string
+      - description: category
+        in: query
+        name: category
+        type: string
+      - description: location id
+        in: query
+        name: locationId
+        type: string
+      - description: from RFC3339
+        in: query
+        name: from
+        type: string
+      - description: to RFC3339
+        in: query
+        name: to
+        type: string
+      - description: page
+        in: query
+        name: page
+        type: integer
+      - description: page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List incidents
+      tags:
+      - incidents
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: incident
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/incident.createBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Create incident draft
+      tags:
+      - incidents
+  /incidents/{id}:
+    get:
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Get incident
+      tags:
+      - incidents
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/incident.patchBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Update incident
+      tags:
+      - incidents
+  /incidents/{id}/close:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Close incident
+      tags:
+      - workflow
+  /incidents/{id}/files:
+    get:
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List incident files
+      tags:
+      - files
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: files
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Upload incident evidence
+      tags:
+      - files
+  /incidents/{id}/files/{fileId}:
+    delete:
+      parameters:
+      - description: incident id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: file id
+        in: path
+        name: fileId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Delete draft incident file
+      tags:
+      - files
+  /incidents/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: comment
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/workflow.commentBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Reject incident
+      tags:
+      - workflow
+  /incidents/{id}/start-corrective-action:
+    post:
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Move incident to corrective action (P2 stub)
+      tags:
+      - workflow
+  /incidents/{id}/submit:
+    post:
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Submit incident draft
+      tags:
+      - incidents
+  /incidents/{id}/timeline:
+    get:
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Incident workflow timeline
+      tags:
+      - workflow
+  /incidents/{id}/verify:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: comment
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/workflow.commentBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Verify incident (supervisor)
+      tags:
+      - workflow
   /locations:
     get:
       produces:

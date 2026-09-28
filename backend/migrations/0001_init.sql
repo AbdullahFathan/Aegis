@@ -150,6 +150,13 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS incident_number_counters (
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    last_seq INTEGER NOT NULL,
+    PRIMARY KEY (year, month)
+);
+
 CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents (status);
 CREATE INDEX IF NOT EXISTS idx_incidents_location_id ON incidents (location_id);
 CREATE INDEX IF NOT EXISTS idx_incidents_incident_datetime ON incidents (incident_datetime);

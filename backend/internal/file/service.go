@@ -1,0 +1,206 @@
+package file
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"aegis/internal/auditlog"
+	"aegis/internal/incident"
+	"aegis/internal/incscope"
+	"aegis/pkg/authctx"
+	"aegis/pkg/database"
+	"aegis/pkg/storage"
+
+	"github.com/google/uuid"
+)
+
+type Clock func() time.Time
+
+type Service struct {
+	Repo    *incident.Repository
+	Store   storage.ObjectStore
+	Audit   auditlog.Writer
+	Now     Clock
+	Presign time.Duration
+}
+
+func (s *Service) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now().UTC()
+}
+
+func (s *Service) presignTTL() time.Duration {
+	if s.Presign > 0 {
+		return s.Presign
+	}
+	return storage.SignedURLTTL
+}
+
+type Upload struct {
+	Name    string
+	Content []byte
+}
+
+func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Upload, actor authctx.Principal, ip string) ([]database.IncidentFile, error) {
+	if len(files) == 0 {
+		return nil, incident.WrapValidation("at least one file is required")
+	}
+	if len(files) > storage.MaxFilesPerRequest {
+		return nil, incident.WrapValidation("maximum 5 files per request")
+	}
+	inc, loc, err := s.loadVisible(incidentID, actor)
+	if err != nil {
+		return nil, err
+	}
+	if !s.canWrite(actor, inc, loc) {
+		return nil, incident.ErrForbidden
+	}
+
+	out := make([]database.IncidentFile, 0, len(files))
+	for _, f := range files {
+		if int64(len(f.Content)) > storage.MaxBytes {
+			return nil, incident.WrapValidation("file exceeds 10MB")
+		}
+		ext := strings.ToLower(filepath.Ext(f.Name))
+		want, ok := expectedMIME(ext)
+		if !ok {
+			return nil, incident.WrapValidation("unsupported file type")
+		}
+		head := f.Content
+		if len(head) > 512 {
+			head = head[:512]
+		}
+		got := sniffMIME(head)
+		if got != want {
+			return nil, incident.WrapValidation("MIME type does not match file content")
+		}
+		key := fmt.Sprintf("incidents/%s/%s", incidentID.String(), uuid.New().String())
+		if err := s.Store.Put(ctx, key, bytes.NewReader(f.Content), int64(len(f.Content)), want); err != nil {
+			return nil, err
+		}
+		row := database.IncidentFile{
+			IncidentID:   incidentID,
+			UploadedByID: actor.ID,
+			OriginalName: f.Name,
+			StoredKey:    key,
+			MimeType:     want,
+			SizeBytes:    int64(len(f.Content)),
+			Context:      database.FileIncidentEvidence,
+		}
+		if err := s.Repo.CreateFile(&row); err != nil {
+			return nil, err
+		}
+		_ = s.Audit.Insert(ctx, auditlog.Entry{
+			UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
+			EntityType: "IncidentFile", EntityID: row.ID.String(),
+			Action: database.AuditFileUploaded,
+			After: map[string]any{
+				"incidentId": incidentID.String(),
+				"storedKey":  key,
+				"mimeType":   want,
+				"sizeBytes":  row.SizeBytes,
+			},
+		})
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+func (s *Service) List(ctx context.Context, incidentID uuid.UUID, actor authctx.Principal) ([]map[string]any, error) {
+	if _, _, err := s.loadVisible(incidentID, actor); err != nil {
+		return nil, err
+	}
+	items, err := s.Repo.ListFiles(incidentID)
+	if err != nil {
+		return nil, err
+	}
+	expiry := s.presignTTL()
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		url, err := s.Store.PresignGet(ctx, it.StoredKey, expiry)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{
+			"id":           it.ID,
+			"originalName": it.OriginalName,
+			"mimeType":     it.MimeType,
+			"sizeBytes":    it.SizeBytes,
+			"context":      it.Context,
+			"storedKey":    it.StoredKey,
+			"url":          url,
+			"expiresIn":    int(expiry.Seconds()),
+			"createdAt":    it.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) Delete(incidentID, fileID uuid.UUID, actor authctx.Principal) error {
+	inc, loc, err := s.loadVisible(incidentID, actor)
+	if err != nil {
+		return err
+	}
+	if inc.Status != database.StatusDraft {
+		return incident.WrapIllegal("files cannot be deleted after submit")
+	}
+	if inc.ReporterID != actor.ID && actor.Role != database.RoleSuperAdmin && actor.Role != database.RoleAdmin {
+		return incident.ErrForbidden
+	}
+	_ = loc
+	f, err := s.Repo.FindFile(fileID)
+	if err != nil {
+		return err
+	}
+	if f.IncidentID != incidentID {
+		return incident.ErrNotFound
+	}
+	return s.Repo.DeleteFile(fileID)
+}
+
+func (s *Service) canWrite(actor authctx.Principal, inc database.Incident, loc database.Location) bool {
+	if inc.Status == database.StatusClosed {
+		return false
+	}
+	if inc.Status == database.StatusDraft || inc.Status == database.StatusRejected {
+		return inc.ReporterID == actor.ID
+	}
+	if actor.Role == database.RoleHSEManager || actor.Role == database.RoleSuperAdmin {
+		return true
+	}
+	return actor.Role == database.RoleHSEOfficer && incscope.IsLocationOfficer(actor, loc)
+}
+
+func (s *Service) loadVisible(id uuid.UUID, actor authctx.Principal) (database.Incident, database.Location, error) {
+	inc, err := s.Repo.Find(id)
+	if err != nil {
+		return database.Incident{}, database.Location{}, err
+	}
+	loc, err := s.Repo.FindLocation(inc.LocationID)
+	if err != nil {
+		return database.Incident{}, database.Location{}, err
+	}
+	if !incscope.CanSee(actor, inc, loc) {
+		return database.Incident{}, database.Location{}, incident.ErrNotFound
+	}
+	return inc, loc, nil
+}
+
+func ReadLimited(r io.Reader, max int64) ([]byte, error) {
+	var buf bytes.Buffer
+	n, err := io.Copy(&buf, io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if n > max {
+		return nil, incident.WrapValidation("file exceeds 10MB")
+	}
+	return buf.Bytes(), nil
+}

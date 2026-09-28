@@ -2,7 +2,7 @@
 //
 //	@title			Aegis API
 //	@version		1.0
-//	@description	K3 incident reporting backend (Phase 1 skeleton).
+//	@description	K3 incident reporting backend (Phase 2: incidents, workflow, files).
 //	@BasePath		/
 //
 //	@securityDefinitions.apikey	BearerAuth
@@ -19,14 +19,18 @@ import (
 	_ "aegis/docs"
 	"aegis/internal/auditlog"
 	"aegis/internal/auth"
+	"aegis/internal/file"
+	"aegis/internal/incident"
 	"aegis/internal/location"
 	"aegis/internal/user"
+	"aegis/internal/workflow"
 	"aegis/pkg/database"
 	"aegis/pkg/logger"
 	"aegis/pkg/middleware"
 	"aegis/pkg/rbac"
 	"aegis/pkg/redisx"
 	"aegis/pkg/response"
+	"aegis/pkg/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
@@ -117,6 +121,15 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	userH := &user.Handler{Service: &user.Service{Users: &user.Repository{DB: db}, Audit: audit}}
 	locH := &location.Handler{Service: &location.Service{Repo: &location.Repository{DB: db}, Audit: audit}}
 
+	incRepo := &incident.Repository{DB: db}
+	incH := &incident.Handler{Service: &incident.Service{Repo: incRepo, Audit: audit}}
+	wfH := &workflow.Handler{Service: &workflow.Service{DB: db, Audit: audit}}
+	var store storage.ObjectStore = storage.NewMemory()
+	if cfg.RustFSAccessKey != "" && cfg.RustFSSecretKey != "" {
+		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	}
+	fileH := &file.Handler{Service: &file.Service{Repo: incRepo, Store: store, Audit: audit}}
+
 	r.With(middleware.LoginRateLimit(limiter)).Post("/auth/login", authH.Login)
 	r.Post("/auth/refresh", authH.Refresh)
 	r.Post("/auth/logout", authH.Logout)
@@ -137,6 +150,20 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Delete("/locations/{id}", locH.DeleteLocation)
 		ar.With(middleware.RequirePermission(rbac.LocationsRead)).Get("/locations/{id}/areas", locH.ListAreas)
 		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Post("/locations/{id}/areas", locH.CreateArea)
+
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents", incH.List)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents", incH.Create)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}", incH.Get)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Patch("/incidents/{id}", incH.Patch)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents/{id}/submit", incH.Submit)
+		ar.With(middleware.RequirePermission(rbac.IncidentsVerify)).Post("/incidents/{id}/verify", wfH.Verify)
+		ar.With(middleware.RequirePermission(rbac.IncidentsReject)).Post("/incidents/{id}/reject", wfH.Reject)
+		ar.With(middleware.RequirePermission(rbac.IncidentsClose)).Post("/incidents/{id}/close", wfH.Close)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents/{id}/start-corrective-action", wfH.StartCorrectiveAction)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/timeline", wfH.Timeline)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/files", fileH.List)
+		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Post("/incidents/{id}/files", fileH.Upload)
+		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Delete("/incidents/{id}/files/{fileId}", fileH.Delete)
 	})
 
 	return r

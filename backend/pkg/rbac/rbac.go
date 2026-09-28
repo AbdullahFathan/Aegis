@@ -5,11 +5,16 @@ import "aegis/pkg/database"
 type Permission string
 
 const (
-	UsersRead      Permission = "users:read"
-	UsersWrite     Permission = "users:write"
-	LocationsRead  Permission = "locations:read"
-	LocationsWrite Permission = "locations:write"
-	IncidentsClose Permission = "incidents:close"
+	UsersRead       Permission = "users:read"
+	UsersWrite      Permission = "users:write"
+	LocationsRead   Permission = "locations:read"
+	LocationsWrite  Permission = "locations:write"
+	IncidentsRead   Permission = "incidents:read"
+	IncidentsWrite  Permission = "incidents:write"
+	IncidentsVerify Permission = "incidents:verify"
+	IncidentsReject Permission = "incidents:reject"
+	IncidentsClose  Permission = "incidents:close"
+	FilesWrite      Permission = "files:write"
 )
 
 var allPermissions = []Permission{
@@ -17,7 +22,12 @@ var allPermissions = []Permission{
 	UsersWrite,
 	LocationsRead,
 	LocationsWrite,
+	IncidentsRead,
+	IncidentsWrite,
+	IncidentsVerify,
+	IncidentsReject,
 	IncidentsClose,
+	FilesWrite,
 }
 
 func AllPermissions() []Permission {
@@ -41,8 +51,12 @@ func Has(role database.Role, perm Permission) bool {
 		return role == database.RoleAdmin
 	case LocationsWrite:
 		return role == database.RoleAdmin
-	case LocationsRead:
+	case LocationsRead, IncidentsRead, IncidentsWrite, FilesWrite:
 		return true
+	case IncidentsVerify:
+		return role == database.RoleSupervisor || role == database.RoleHSEManager
+	case IncidentsReject:
+		return role == database.RoleSupervisor || role == database.RoleHSEOfficer || role == database.RoleHSEManager
 	case IncidentsClose:
 		return role == database.RoleHSEManager
 	default:

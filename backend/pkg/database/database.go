@@ -40,6 +40,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&Location{},
 		&Area{},
 		&Incident{},
+		&IncidentNumberCounter{},
 		&IncidentWorkflowLog{},
 		&RootCauseAnalysis{},
 		&CorrectiveAction{},
