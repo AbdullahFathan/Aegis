@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"time"
@@ -40,6 +41,7 @@ import (
 	"aegis/pkg/storage"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
@@ -47,6 +49,7 @@ import (
 )
 
 func main() {
+	_ = godotenv.Load()
 	cfg := config.Load()
 	log, err := logger.New(cfg.AppEnv)
 	if err != nil {
@@ -62,6 +65,13 @@ func main() {
 		}
 		if err := database.AutoMigrate(db); err != nil {
 			log.Fatal("database_migrate_failed", zap.Error(err))
+		}
+		created, err := user.SeedSuperAdmin(&user.Repository{DB: db}, cfg.SuperadminUsername, cfg.SuperadminPassword)
+		if err != nil {
+			log.Fatal("superadmin_seed_failed", zap.Error(err))
+		}
+		if created {
+			log.Info("superadmin_seeded")
 		}
 		log.Info("database_ready")
 	} else {
@@ -138,9 +148,11 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	rcaH := &rca.Handler{Service: &rca.Service{DB: db, Audit: audit}}
 	caH := &correctiveaction.Handler{Service: &correctiveaction.Service{DB: db, Audit: audit, Notify: notifSvc}}
 	notifH := &notification.Handler{Service: notifSvc}
-	var store storage.ObjectStore = storage.NewMemory()
-	if cfg.RustFSAccessKey != "" && cfg.RustFSSecretKey != "" {
-		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	storeCtx, storeCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	store, err := storage.Open(storeCtx, cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	storeCancel()
+	if err != nil {
+		log.Fatal("object_store_failed", zap.Error(err))
 	}
 	fileH := &file.Handler{Service: &file.Service{Repo: incRepo, Store: store, Audit: audit}}
 	tz, err := time.LoadLocation(cfg.ReportTZ)
@@ -150,7 +162,7 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	dashH := &dashboard.Handler{Service: &dashboard.Service{DB: db}}
 	repSvc := &report.Service{
 		DB: db, Queue: report.RedisQueue{Client: rdb}, Store: store, PDF: aegispdf.Fpdf{},
-		Notify: notifSvc, Once: notification.RedisOnce{Client: rdb}, TZ: tz, CompanyName: cfg.CompanyName,
+		Notify: notifSvc, Once: notification.RedisOnce{Client: rdb}, TZ: tz, CompanyName: cfg.CompanyName, Log: log,
 	}
 	repH := &report.Handler{Service: repSvc}
 	auditH := &auditlog.Handler{Repo: audit}

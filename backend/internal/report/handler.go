@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"aegis/internal/corrective_action"
 	"aegis/internal/incident"
 	"aegis/pkg/authctx"
 	"aegis/pkg/database"
@@ -130,7 +131,11 @@ func (h *Handler) Monthly(w http.ResponseWriter, r *http.Request) {
 		writeCSV(w, "monthly.csv", MonthlyCSV(items))
 		return
 	}
-	_ = response.Success(w, http.StatusOK, items)
+	views := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		views = append(views, incident.View(it))
+	}
+	_ = response.Success(w, http.StatusOK, views)
 }
 
 // LTIFR godoc
@@ -202,7 +207,7 @@ func (h *Handler) CorrectiveActions(w http.ResponseWriter, r *http.Request) {
 		writeCSV(w, "corrective-actions.csv", CACSV(items))
 		return
 	}
-	_ = response.Success(w, http.StatusOK, items)
+	_ = response.Success(w, http.StatusOK, correctiveaction.ViewList(items))
 }
 
 // Investigation godoc

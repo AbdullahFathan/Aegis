@@ -18,6 +18,7 @@ import (
 	"aegis/pkg/storage"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -39,6 +40,7 @@ type Service struct {
 	Now         func() time.Time
 	TZ          *time.Location
 	CompanyName string
+	Log         *zap.Logger
 }
 
 func (s *Service) now() time.Time {
@@ -74,6 +76,13 @@ func (s *Service) queue() JobQueue {
 		return s.Queue
 	}
 	return &MemoryQueue{}
+}
+
+func (s *Service) log() *zap.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return zap.NewNop()
 }
 
 type QueryFilter struct {
@@ -375,24 +384,31 @@ func (s *Service) ProcessOne(ctx context.Context, id uuid.UUID) error {
 			"error_message": msg,
 			"completed_at":  s.now(),
 		}).Error
+		s.log().Error("report_job_failed", zap.String("jobId", id.String()), zap.String("type", string(row.Type)), zap.String("error", msg))
 		return nil
 	}
 	sum := sha256.Sum256(append([]byte(row.ID.String()), body...))
 	key := "reports/" + hex.EncodeToString(sum[:]) + ".pdf"
 	if err := s.store().Put(ctx, key, bytes.NewReader(body), int64(len(body)), "application/pdf"); err != nil {
 		msg := err.Error()
-		return s.DB.Model(&row).Updates(map[string]any{
+		dbErr := s.DB.Model(&row).Updates(map[string]any{
 			"status":        database.ReportFailed,
 			"error_message": msg,
 			"completed_at":  s.now(),
 		}).Error
+		s.log().Error("report_job_failed", zap.String("jobId", id.String()), zap.String("type", string(row.Type)), zap.String("error", msg))
+		return dbErr
 	}
 	now := s.now()
-	return s.DB.Model(&row).Updates(map[string]any{
+	if err := s.DB.Model(&row).Updates(map[string]any{
 		"status":       database.ReportDone,
 		"stored_key":   key,
 		"completed_at": now,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	s.log().Info("report_job_done", zap.String("jobId", id.String()), zap.String("type", string(row.Type)), zap.String("storedKey", key))
+	return nil
 }
 
 func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]byte, error) {

@@ -3,6 +3,8 @@ package report_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -193,6 +195,61 @@ func TestOfficerCannotSeeOtherSiteMonthly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, locA.ID, items[0].LocationID)
+}
+
+func TestMonthlyAndCAJSONOmitRelations(t *testing.T) {
+	db := testDB(t)
+	mgr := seedUser(t, db, "m@example.com", database.RoleHSEManager)
+	rep := seedUser(t, db, "r@example.com", database.RoleReporter)
+	sup := seedUser(t, db, "s@example.com", database.RoleSupervisor)
+	off := seedUser(t, db, "o@example.com", database.RoleHSEOfficer)
+	loc := database.Location{
+		Name: "A", Code: "TMB-A", Type: database.LocationTambang,
+		SupervisorID: sup.ID, HSEOfficerID: off.ID, IsActive: true,
+	}
+	require.NoError(t, db.Create(&loc).Error)
+	num := "INC-2026-0001"
+	inc := database.Incident{
+		IncidentNumber: &num, Title: "Slip",
+		Description: "Worker slipped on wet surface near loading area during morning shift.",
+		Category:    database.CategoryNearMiss, Severity: database.SeverityLow, EscalationLevel: database.EscalationL1,
+		Status: database.StatusPendingReview, IncidentDatetime: time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC),
+		LocationID: loc.ID, ReporterID: rep.ID,
+	}
+	require.NoError(t, db.Create(&inc).Error)
+	require.NoError(t, db.Create(&database.CorrectiveAction{
+		IncidentID: inc.ID, Description: "Install guard rail along the wet loading bay.",
+		ActionType: database.ActionImmediate, Priority: database.PriorityHigh, Status: database.CAStatusOpen,
+		AssigneeID: rep.ID, DueDate: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+	}).Error)
+
+	h := &report.Handler{Service: &report.Service{DB: db}}
+	actor := authctx.Principal{ID: mgr.ID, Role: mgr.Role}
+	q := "?from=2026-09-01T00:00:00Z&to=2026-09-30T23:59:59Z"
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/reports/monthly"+q, nil)
+	req = req.WithContext(authctx.WithPrincipal(req.Context(), actor))
+	h.Monthly(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, body, `"incidentNumber"`)
+	require.Contains(t, body, num)
+	require.NotContains(t, body, "PasswordHash")
+	require.NotContains(t, body, `"Location"`)
+	require.NotContains(t, body, `"Reporter"`)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/reports/corrective-actions"+q, nil)
+	req = req.WithContext(authctx.WithPrincipal(req.Context(), actor))
+	h.CorrectiveActions(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	body = rec.Body.String()
+	require.Contains(t, body, `"assigneeId"`)
+	require.Contains(t, body, rep.ID.String())
+	require.NotContains(t, body, "PasswordHash")
+	require.NotContains(t, body, `"Assignee"`)
+	require.NotContains(t, body, `"Incident"`)
 }
 
 func TestRedisQueueNilClientAndRecordable(t *testing.T) {

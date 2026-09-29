@@ -15,6 +15,8 @@ Copy `.env.example` to `.env` and fill values on the machine that runs the stack
 
 Production must set `JWT_ACCESS_SECRET`, `POSTGRES_PASSWORD`, `RUSTFS_ACCESS_KEY`, and `RUSTFS_SECRET_KEY`. The process falls back to a development JWT secret only when `JWT_ACCESS_SECRET` is unset.
 
+When `SUPERADMIN_USERNAME` and `SUPERADMIN_PASSWORD` are both set, the API inserts that user once at startup if the email is missing. Log in with `POST /auth/login` using the username as `email`. An existing account is left unchanged. Leave either value empty to skip seeding.
+
 ## Run
 
 Development (publishes Postgres `5432` and Redis `6379`):

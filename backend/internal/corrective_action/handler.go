@@ -58,7 +58,7 @@ func (h *Handler) ListByIncident(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	_ = response.Success(w, http.StatusOK, viewList(items))
+	_ = response.Success(w, http.StatusOK, ViewList(items))
 }
 
 // Create godoc
@@ -105,7 +105,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	_ = response.Success(w, http.StatusCreated, viewCA(row))
+	_ = response.Success(w, http.StatusCreated, View(row))
 }
 
 // Patch godoc
@@ -165,7 +165,7 @@ func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	_ = response.Success(w, http.StatusOK, viewCA(row))
+	_ = response.Success(w, http.StatusOK, View(row))
 }
 
 // Verify godoc
@@ -188,7 +188,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	_ = response.Success(w, http.StatusOK, viewCA(row))
+	_ = response.Success(w, http.StatusOK, View(row))
 }
 
 // Tracker godoc
@@ -234,7 +234,7 @@ func (h *Handler) Tracker(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	_ = response.Success(w, http.StatusOK, viewList(items))
+	_ = response.Success(w, http.StatusOK, ViewList(items))
 }
 
 func actorUUID(w http.ResponseWriter, r *http.Request, param string) (authctx.Principal, uuid.UUID, bool) {
@@ -258,7 +258,7 @@ func parseDate(raw string) (time.Time, error) {
 	return time.Parse("2006-01-02", raw)
 }
 
-func viewCA(row database.CorrectiveAction) map[string]any {
+func View(row database.CorrectiveAction) map[string]any {
 	return map[string]any{
 		"id":              row.ID,
 		"incidentId":      row.IncidentID,
@@ -275,10 +275,10 @@ func viewCA(row database.CorrectiveAction) map[string]any {
 	}
 }
 
-func viewList(items []database.CorrectiveAction) []map[string]any {
+func ViewList(items []database.CorrectiveAction) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, it := range items {
-		out = append(out, viewCA(it))
+		out = append(out, View(it))
 	}
 	return out
 }

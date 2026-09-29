@@ -32,6 +32,15 @@ func (r *Repository) Update(u *database.User) error {
 	return r.DB.Save(u).Error
 }
 
+func (r *Repository) FindByEmail(email string) (database.User, error) {
+	var u database.User
+	err := r.DB.Where("email = ?", email).First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return database.User{}, ErrNotFound
+	}
+	return u, err
+}
+
 func (r *Repository) FindByID(id uuid.UUID) (database.User, error) {
 	var u database.User
 	err := r.DB.First(&u, "id = ?", id).Error

@@ -18,10 +18,12 @@ import (
 	"aegis/pkg/redisx"
 	"aegis/pkg/storage"
 
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 func main() {
+	_ = godotenv.Load()
 	cfg := config.Load()
 	log, err := logger.New(cfg.AppEnv)
 	if err != nil {
@@ -52,9 +54,11 @@ func main() {
 	}
 	caJobs := &correctiveaction.Service{DB: db, Jobs: notif, Once: once}
 
-	var store storage.ObjectStore = storage.NewMemory()
-	if cfg.RustFSAccessKey != "" && cfg.RustFSSecretKey != "" {
-		store = storage.NewS3(cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	storeCtx, storeCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	store, err := storage.Open(storeCtx, cfg.RustFSEndpoint, cfg.RustFSAccessKey, cfg.RustFSSecretKey, cfg.RustFSBucket)
+	storeCancel()
+	if err != nil {
+		log.Fatal("object_store_failed", zap.Error(err))
 	}
 	tz, err := time.LoadLocation(cfg.ReportTZ)
 	if err != nil {
@@ -62,7 +66,7 @@ func main() {
 	}
 	reports := &report.Service{
 		DB: db, Queue: report.RedisQueue{Client: rdb}, Store: store, PDF: aegispdf.Fpdf{},
-		Notify: notif, Once: once, TZ: tz, CompanyName: cfg.CompanyName,
+		Notify: notif, Once: once, TZ: tz, CompanyName: cfg.CompanyName, Log: log,
 	}
 
 	log.Info("worker_started", zap.String("mode", "jobs"))
@@ -77,9 +81,15 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 		defer cancel()
 		ok, err := rdb.SetNX(ctx, "worker:tick", "1", 50*time.Second).Result()
-		if err != nil || !ok {
+		if err != nil {
+			log.Error("worker_tick_lock_failed", zap.Error(err))
 			return
 		}
+		if !ok {
+			log.Debug("worker_tick_skipped")
+			return
+		}
+		log.Info("worker_tick")
 		now := time.Now().UTC()
 		if err := caJobs.RunOverdueJob(ctx, now); err != nil {
 			log.Error("worker_overdue_failed", zap.Error(err))

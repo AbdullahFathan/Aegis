@@ -2,14 +2,18 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 type S3 struct {
@@ -31,6 +35,73 @@ func NewS3(endpoint, accessKey, secretKey, bucket string) *S3 {
 		client:  client,
 		presign: s3.NewPresignClient(client),
 		bucket:  bucket,
+	}
+}
+
+func Open(ctx context.Context, endpoint, accessKey, secretKey, bucket string) (ObjectStore, error) {
+	if accessKey == "" || secretKey == "" {
+		return NewMemory(), nil
+	}
+	s := NewS3(endpoint, accessKey, secretKey, bucket)
+	if err := s.EnsureBucket(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *S3) EnsureBucket(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)})
+	if err == nil {
+		return nil
+	}
+	if !isMissingBucket(err) {
+		return fmt.Errorf("head bucket %s: %w", s.bucket, err)
+	}
+	_, err = s.client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(s.bucket)})
+	if err == nil || isBucketAlreadyThere(err) {
+		return nil
+	}
+	return fmt.Errorf("create bucket %s: %w", s.bucket, err)
+}
+
+func isMissingBucket(err error) bool {
+	var nfe *types.NotFound
+	if errors.As(err, &nfe) {
+		return true
+	}
+	var nsb *types.NoSuchBucket
+	if errors.As(err, &nsb) {
+		return true
+	}
+	var api smithy.APIError
+	if errors.As(err, &api) {
+		switch api.ErrorCode() {
+		case "NotFound", "NoSuchBucket", "404":
+			return true
+		}
+	}
+	var re *awshttp.ResponseError
+	return errors.As(err, &re) && re.HTTPStatusCode() == 404
+}
+
+func isBucketAlreadyThere(err error) bool {
+	var owned *types.BucketAlreadyOwnedByYou
+	if errors.As(err, &owned) {
+		return true
+	}
+	var exists *types.BucketAlreadyExists
+	if errors.As(err, &exists) {
+		return true
+	}
+	var api smithy.APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	switch api.ErrorCode() {
+	case "BucketAlreadyOwnedByYou", "BucketAlreadyExists":
+		return true
+	default:
+		return false
 	}
 }
 
