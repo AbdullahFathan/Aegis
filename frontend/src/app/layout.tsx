@@ -1,0 +1,35 @@
+import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
+
+import { Toaster } from "@/components/ui/sonner";
+import { Providers } from "@/lib/providers";
+
+import "./globals.css";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Aegis",
+  description: "Sistem pelaporan insiden K3",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html lang="id" className={`${inter.variable} ${jetbrains.variable} h-full antialiased`}>
+      <body className="min-h-full bg-canvas text-ink">
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
+      </body>
+    </html>
+  );
+}
