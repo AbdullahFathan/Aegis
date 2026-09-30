@@ -78,8 +78,9 @@ export async function refreshAccessToken() {
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, retry = false, headers, ...init } = options;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   const requestHeaders = new Headers(headers);
-  if (body !== undefined && !requestHeaders.has("Content-Type")) {
+  if (body !== undefined && !isFormData && !requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");
   }
   if (auth && accessToken) {
@@ -90,7 +91,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     ...init,
     headers: requestHeaders,
     credentials: "include",
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canSeeNavItem, type NavItem } from "@/lib/rbac";
+import { canSeeNavItem, workflowActionsFor, type NavItem } from "@/lib/rbac";
 import { ROLES } from "@/lib/schemas";
 
 const items: NavItem[] = [
@@ -36,5 +36,33 @@ describe("canSeeNavItem", () => {
   it("covers every role and menu pair", () => {
     const seen = ROLES.flatMap((role) => items.map((item) => canSeeNavItem(role, item)));
     expect(seen).toHaveLength(ROLES.length * items.length);
+  });
+});
+
+describe("workflowActionsFor", () => {
+  it("lets a supervisor verify and reject pending review", () => {
+    expect(workflowActionsFor("SUPERVISOR", "PENDING_REVIEW")).toEqual(["verify", "reject"]);
+  });
+
+  it("does not let a reporter verify", () => {
+    expect(workflowActionsFor("REPORTER", "PENDING_REVIEW")).toEqual([]);
+  });
+
+  it("lets an HSE officer reject but not verify", () => {
+    expect(workflowActionsFor("HSE_OFFICER", "PENDING_REVIEW")).toEqual(["reject"]);
+  });
+
+  it("lets HSE officer start CA during investigation", () => {
+    expect(workflowActionsFor("HSE_OFFICER", "UNDER_INVESTIGATION")).toEqual(["startCA"]);
+  });
+
+  it("lets HSE manager close from investigation or CA", () => {
+    expect(workflowActionsFor("HSE_MANAGER", "UNDER_INVESTIGATION")).toEqual(["startCA", "close"]);
+    expect(workflowActionsFor("HSE_MANAGER", "CORRECTIVE_ACTION")).toEqual(["close"]);
+  });
+
+  it("hides close from admin and reporter", () => {
+    expect(workflowActionsFor("ADMIN", "UNDER_INVESTIGATION")).toEqual([]);
+    expect(workflowActionsFor("REPORTER", "CORRECTIVE_ACTION")).toEqual([]);
   });
 });

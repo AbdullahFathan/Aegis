@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/shared/EmptyState";
+"use client";
+
+import { Suspense } from "react";
+
+import { IncidentsScreen } from "@/components/incidents/IncidentsScreen";
+import { LoadingBlock } from "@/components/shared/EmptyState";
 
 export default function IncidentsPage() {
   return (
-    <PlaceholderPage
-      title="Insiden"
-      description="Daftar dan formulir pelaporan insiden akan tersedia pada tahap berikutnya."
-    />
+    <Suspense fallback={<LoadingBlock />}>
+      <IncidentsScreen />
+    </Suspense>
   );
 }

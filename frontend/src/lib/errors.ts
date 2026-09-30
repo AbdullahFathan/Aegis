@@ -20,3 +20,17 @@ export function mapApiError(error: unknown, fallback: string) {
   }
   return fallback;
 }
+
+export function mapIncidentError(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    if (error.status === 409) {
+      return error.message || "Laporan sudah disubmit dan tidak dapat dikirim ulang.";
+    }
+    if (error.status === 422 && /verified/i.test(error.message)) {
+      return "Semua corrective action harus terverifikasi sebelum laporan ditutup.";
+    }
+    if (error.status === 403) return "Anda tidak memiliki akses untuk aksi ini.";
+    return error.message || fallback;
+  }
+  return fallback;
+}
