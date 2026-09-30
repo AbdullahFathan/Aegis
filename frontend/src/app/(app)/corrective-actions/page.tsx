@@ -1,10 +1,14 @@
-import { PlaceholderPage } from "@/components/shared/EmptyState";
+"use client";
+
+import { Suspense } from "react";
+
+import { CATrackerScreen } from "@/components/corrective-actions/CATrackerScreen";
+import { LoadingBlock } from "@/components/shared/EmptyState";
 
 export default function CorrectiveActionsPage() {
   return (
-    <PlaceholderPage
-      title="CA Tracker"
-      description="Pelacakan tindakan perbaikan lintas insiden akan tersedia pada tahap berikutnya."
-    />
+    <Suspense fallback={<LoadingBlock />}>
+      <CATrackerScreen />
+    </Suspense>
   );
 }

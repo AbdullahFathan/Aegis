@@ -7,13 +7,10 @@ import { SeverityBadge, StatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateTime } from "@/lib/datetime";
 import type { Incident } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { incidentUrgency, urgencyRowClass } from "@/lib/urgency";
 
 export function isUrgentIncident(incident: Incident) {
-  return (
-    incident.severity === "CRITICAL" ||
-    incident.category === "LTI" ||
-    incident.category === "FATALITY"
-  );
+  return incidentUrgency(incident) !== "none";
 }
 
 export function IncidentCard({
@@ -31,7 +28,7 @@ export function IncidentCard({
       href={`/incidents/${incident.id}`}
       className={cn(
         "block rounded-lg border border-border bg-white p-4 shadow-card",
-        urgent && "border-l-[3px] border-l-danger-500 bg-[#FFEBEE]",
+        urgent && urgencyRowClass(incidentUrgency(incident)),
       )}
     >
       <div className="mb-2 flex items-start justify-between gap-3">

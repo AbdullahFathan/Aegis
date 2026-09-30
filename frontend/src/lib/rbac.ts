@@ -74,3 +74,23 @@ export function canContinueDraft(role: string, status: IncidentStatus, isOwner: 
   if (isOwner) return true;
   return role === "HSE_OFFICER" || role === "HSE_MANAGER" || role === "SUPER_ADMIN";
 }
+
+const HSE_WRITE_ROLES: Role[] = ["SUPER_ADMIN", "HSE_MANAGER", "HSE_OFFICER"];
+
+export function canWriteRca(role: string, incidentStatus: IncidentStatus) {
+  if (incidentStatus === "CLOSED") return false;
+  return HSE_WRITE_ROLES.includes(role as Role);
+}
+
+export function canWriteCA(role: string) {
+  return HSE_WRITE_ROLES.includes(role as Role);
+}
+
+export function canVerifyCA(role: string) {
+  return HSE_WRITE_ROLES.includes(role as Role);
+}
+
+export function canUpdateCAStatus(role: string, userId: string, assigneeId: string) {
+  if (userId === assigneeId) return true;
+  return canWriteCA(role);
+}

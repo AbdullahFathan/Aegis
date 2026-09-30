@@ -3,9 +3,10 @@
 import { Clock, MapPin, UserRound } from "lucide-react";
 import Link from "next/link";
 
+import { IncidentCaPanel } from "@/components/corrective-actions/IncidentCaPanel";
 import { FileUploader } from "@/components/incidents/FileUploader";
-import { isUrgentIncident } from "@/components/incidents/IncidentCard";
 import { WorkflowActions } from "@/components/incidents/WorkflowActions";
+import { RcaReadView } from "@/components/rca/RcaReadView";
 import { EmptyState, LoadingBlock, QueryError } from "@/components/shared/EmptyState";
 import { SeverityBadge, StatusBadge } from "@/components/shared/StatusBadge";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,19 +20,32 @@ import {
   useIncidentTimeline,
   useUploadIncidentFiles,
 } from "@/lib/queries/useIncidents";
+import { useRca } from "@/lib/queries/useRca";
 import { useSession } from "@/lib/queries/useSession";
-import { canContinueDraft } from "@/lib/rbac";
+import { canContinueDraft, canWriteRca } from "@/lib/rbac";
 import { categoryLabels, severityLabels } from "@/lib/schemas";
 import { statusConfig } from "@/lib/tokens";
+import { incidentUrgency, urgencyRowClass } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
+import type { IncidentStatus } from "@/lib/types";
 
-export function IncidentDetailScreen({ incidentId }: { incidentId: string }) {
+const TABS = ["overview", "timeline", "files", "rca", "ca"] as const;
+
+export function IncidentDetailScreen({
+  incidentId,
+  tab = "overview",
+}: {
+  incidentId: string;
+  tab?: string;
+}) {
   const session = useSession();
   const incident = useIncident(incidentId);
   const timeline = useIncidentTimeline(incidentId);
   const files = useIncidentFiles(incidentId);
+  const rca = useRca(incidentId);
   const locations = useLocations();
   const uploadFiles = useUploadIncidentFiles();
+  const initialTab = TABS.includes(tab as (typeof TABS)[number]) ? tab : "overview";
 
   if (incident.isPending) return <LoadingBlock />;
   if (incident.isError || !incident.data) {
@@ -66,7 +80,7 @@ export function IncidentDetailScreen({ incidentId }: { incidentId: string }) {
       <header
         className={cn(
           "rounded-lg border border-border bg-white p-4 shadow-card",
-          isUrgentIncident(row) && "border-l-[3px] border-l-danger-500 bg-[#FFEBEE]",
+          urgencyRowClass(incidentUrgency(row)),
         )}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -106,7 +120,7 @@ export function IncidentDetailScreen({ incidentId }: { incidentId: string }) {
         </Link>
       ) : null}
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={initialTab}>
         <TabsList variant="line">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -181,13 +195,30 @@ export function IncidentDetailScreen({ incidentId }: { incidentId: string }) {
           />
         </TabsContent>
         <TabsContent value="rca" className="mt-4">
-          <EmptyState title="Belum diisi" description="Form investigasi RCA akan tersedia pada tahap berikutnya." />
+          {rca.isPending ? <LoadingBlock /> : null}
+          {rca.data ? <RcaReadView rca={rca.data} /> : null}
+          {!rca.isPending && !rca.data ? (
+            <EmptyState title="Belum diisi" description="Hasil investigasi belum tersedia untuk laporan ini." />
+          ) : null}
+          {session.data && canWriteRca(session.data.role, row.status as IncidentStatus) ? (
+            <Link
+              href={`/incidents/${row.id}/rca`}
+              className={cn(buttonVariants({ variant: "ghost" }), "mt-3 min-h-11 w-fit")}
+            >
+              Isi investigasi
+            </Link>
+          ) : null}
         </TabsContent>
         <TabsContent value="ca" className="mt-4">
-          <EmptyState
-            title="Belum diisi"
-            description="Corrective action per insiden akan tersedia pada tahap berikutnya."
-          />
+          {session.data ? (
+            <IncidentCaPanel
+              incident={row}
+              session={session.data}
+              files={files.data ?? []}
+              closed={closed}
+              onRefreshFiles={async () => (await files.refetch()).data}
+            />
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>

@@ -19,6 +19,12 @@ export function dayEndRfc3339(date: string) {
   return new Date(`${date}T23:59:59.999`).toISOString();
 }
 
+export function formatDate(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(date);
+}
+
 export function formatDateTime(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  caCreateSchema,
+  caDoneSchema,
+  caTrackerFilterSchema,
   incidentFilterSchema,
   incidentFormSchema,
   locationSchema,
   loginSchema,
+  rcaSchema,
   userFormSchema,
 } from "@/lib/schemas";
 
@@ -84,6 +88,62 @@ describe("incidentFilterSchema", () => {
       pageSize: 20,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("rcaSchema", () => {
+  it("rejects more than five why entries", () => {
+    const result = rcaSchema.safeParse({
+      timeline: "",
+      humanFactor: "",
+      environmentFactor: "",
+      equipmentFactor: "",
+      fiveWhys: Array.from({ length: 6 }, () => ({ why: "a", answer: "b" })),
+      fishbone: {
+        man: "",
+        machine: "",
+        method: "",
+        material: "",
+        environment: "",
+        measurement: "",
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires all fishbone keys", () => {
+    const result = rcaSchema.safeParse({
+      timeline: "a",
+      humanFactor: "",
+      environmentFactor: "",
+      equipmentFactor: "",
+      fiveWhys: [],
+      fishbone: { man: "", machine: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ca schemas", () => {
+  it("requires description and due date", () => {
+    const result = caCreateSchema.safeParse({
+      description: "",
+      actionType: "IMMEDIATE",
+      priority: "HIGH",
+      assigneeId: "",
+      dueDate: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Done without completion notes", () => {
+    expect(caDoneSchema.safeParse({ completionNotes: "" }).success).toBe(false);
+    expect(caDoneSchema.safeParse({ completionNotes: "Sudah diperbaiki" }).success).toBe(true);
+  });
+
+  it("accepts OVERDUE in tracker filters", () => {
+    const result = caTrackerFilterSchema.safeParse({ status: "OVERDUE", view: "table" });
+    expect(result.success).toBe(true);
   });
 });
 

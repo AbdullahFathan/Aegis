@@ -94,6 +94,10 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   const payload = (await response.json().catch(() => null)) as Envelope<T> | null;
 
   if (response.status === 401 && auth && !retry && path !== "/auth/refresh") {

@@ -7,7 +7,7 @@ import type { AreaValues, LocationValues, RegionValues } from "@/lib/schemas";
 import type { Area, Region, Site, User, UserFilters, UserList } from "@/lib/types";
 import { usersQueryKey } from "@/lib/types";
 
-export function useUsers(filters: UserFilters) {
+export function useUsers(filters: UserFilters, options?: { enabled?: boolean }) {
   const params = new URLSearchParams({
     page: String(filters.page),
     pageSize: String(filters.pageSize),
@@ -18,6 +18,7 @@ export function useUsers(filters: UserFilters) {
   return useQuery({
     queryKey: usersQueryKey(filters),
     queryFn: () => api<UserList>(`/users?${params.toString()}`),
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -141,3 +141,106 @@ export type IncidentFile = {
 export function incidentsQueryKey(filters: IncidentFilters) {
   return ["incidents", filters] as const;
 }
+
+export type FiveWhy = {
+  why: string;
+  answer: string;
+};
+
+export type Fishbone = {
+  man: string;
+  machine: string;
+  method: string;
+  material: string;
+  environment: string;
+  measurement: string;
+};
+
+export type Rca = {
+  id: string;
+  incidentId: string;
+  timeline: string;
+  humanFactor: string;
+  environmentFactor: string;
+  equipmentFactor: string;
+  fiveWhys: FiveWhy[] | null;
+  fishbone: Fishbone | null;
+  investigatorId: string;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
+export type RcaTemplatePayload = {
+  timeline: string;
+  humanFactor: string;
+  environmentFactor: string;
+  equipmentFactor: string;
+  fiveWhys: FiveWhy[];
+  fishbone: Fishbone;
+};
+
+export type RcaTemplate = {
+  id: string;
+  category: IncidentCategory;
+  payload: RcaTemplatePayload;
+};
+
+export type CaActionType = "IMMEDIATE" | "SHORT_TERM" | "LONG_TERM";
+export type CaPriority = "LOW" | "MEDIUM" | "HIGH";
+export type CaStatus = "OPEN" | "IN_PROGRESS" | "DONE" | "OVERDUE" | "VERIFIED";
+
+export type CorrectiveAction = {
+  id: string;
+  incidentId: string;
+  description: string;
+  actionType: CaActionType;
+  priority: CaPriority;
+  status: CaStatus;
+  assigneeId: string;
+  dueDate: string;
+  completionNotes: string | null;
+  completedAt: string | null;
+  verifiedById: string | null;
+  verifiedAt: string | null;
+};
+
+export type CaTrackerFilters = {
+  status?: CaStatus;
+  assigneeId?: string;
+  priority?: CaPriority;
+  locationId?: string;
+  dueFrom?: string;
+  dueTo?: string;
+  view?: "table" | "kanban";
+};
+
+export function caTrackerQueryKey(filters: CaTrackerFilters) {
+  return ["corrective-actions", filters] as const;
+}
+
+export type NotificationType =
+  | "INCIDENT_SUBMITTED"
+  | "INCIDENT_ESCALATED"
+  | "INCIDENT_VERIFIED"
+  | "INCIDENT_REJECTED"
+  | "INCIDENT_CLOSED"
+  | "SLA_WARNING"
+  | "SLA_OVERDUE"
+  | "CA_ASSIGNED"
+  | "CA_DUE_SOON"
+  | "CA_OVERDUE"
+  | "REPORT_READY";
+
+export type NotificationPriority = "INFO" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type AppNotification = {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  priority: NotificationPriority;
+  isRead: boolean;
+  referenceType: string;
+  referenceId: string;
+  createdAt: string;
+};

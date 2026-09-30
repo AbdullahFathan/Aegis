@@ -51,6 +51,13 @@ describe("api client", () => {
     expect(getAccessToken()).toBeNull();
   });
 
+  it("treats HTTP 204 as success without a JSON envelope", async () => {
+    setAccessToken("token");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    stubFetch(fetchMock as unknown as typeof fetch);
+    await expect(api("/notifications/1/read", { method: "PATCH" })).resolves.toBeUndefined();
+  });
+
   it("sends FormData without JSON content-type", async () => {
     setAccessToken("token");
     const fetchMock = vi.fn().mockResolvedValue(json(201, { success: true, data: [] }));

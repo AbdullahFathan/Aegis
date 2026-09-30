@@ -222,3 +222,160 @@ export function parseIncidentSearchParams(
   if (parsed.success) return parsed.data;
   return { page: 1, pageSize: 20 };
 }
+
+export const FISHBONE_KEYS = [
+  "man",
+  "machine",
+  "method",
+  "material",
+  "environment",
+  "measurement",
+] as const;
+
+export const fishboneLabels: Record<(typeof FISHBONE_KEYS)[number], string> = {
+  man: "Man (manusia)",
+  machine: "Machine (mesin/peralatan)",
+  method: "Method (metode/prosedur)",
+  material: "Material (bahan)",
+  environment: "Environment (lingkungan)",
+  measurement: "Measurement (pengukuran/SOP)",
+};
+
+export const emptyFishbone = {
+  man: "",
+  machine: "",
+  method: "",
+  material: "",
+  environment: "",
+  measurement: "",
+};
+
+export const rcaSchema = z.object({
+  timeline: optionalText,
+  humanFactor: optionalText,
+  environmentFactor: optionalText,
+  equipmentFactor: optionalText,
+  fiveWhys: z
+    .array(
+      z.object({
+        why: optionalText,
+        answer: optionalText,
+      }),
+    )
+    .max(5, "5-Why maksimal 5 entri"),
+  fishbone: z.object({
+    man: optionalText,
+    machine: optionalText,
+    method: optionalText,
+    material: optionalText,
+    environment: optionalText,
+    measurement: optionalText,
+  }),
+});
+
+export type RcaFormValues = z.infer<typeof rcaSchema>;
+
+export function emptyRcaValues(): RcaFormValues {
+  return {
+    timeline: "",
+    humanFactor: "",
+    environmentFactor: "",
+    equipmentFactor: "",
+    fiveWhys: [{ why: "", answer: "" }],
+    fishbone: { ...emptyFishbone },
+  };
+}
+
+export const CA_ACTION_TYPES = ["IMMEDIATE", "SHORT_TERM", "LONG_TERM"] as const;
+export const CA_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
+export const CA_STATUSES = ["OPEN", "IN_PROGRESS", "DONE", "OVERDUE", "VERIFIED"] as const;
+
+export const caActionTypeLabels: Record<(typeof CA_ACTION_TYPES)[number], string> = {
+  IMMEDIATE: "Segera",
+  SHORT_TERM: "Jangka pendek",
+  LONG_TERM: "Jangka panjang",
+};
+
+export const caPriorityLabels: Record<(typeof CA_PRIORITIES)[number], string> = {
+  LOW: "Rendah",
+  MEDIUM: "Sedang",
+  HIGH: "Tinggi",
+};
+
+export const caCreateSchema = z.object({
+  description: required("Deskripsi tindakan"),
+  actionType: z.enum(CA_ACTION_TYPES, { error: "Tipe wajib dipilih" }),
+  priority: z.enum(CA_PRIORITIES, { error: "Prioritas wajib dipilih" }),
+  assigneeId: required("Penanggung jawab"),
+  dueDate: required("Tenggat"),
+});
+
+export type CaCreateValues = z.infer<typeof caCreateSchema>;
+
+export const caDoneSchema = z.object({
+  completionNotes: required("Catatan penyelesaian"),
+});
+
+export const caTrackerFilterSchema = z.object({
+  status: z.enum(CA_STATUSES, { error: "Status tidak valid" }).optional(),
+  assigneeId: z.string().min(1).optional(),
+  priority: z.enum(CA_PRIORITIES, { error: "Prioritas tidak valid" }).optional(),
+  locationId: z.string().min(1).optional(),
+  dueFrom: z.string().optional(),
+  dueTo: z.string().optional(),
+  view: z.enum(["table", "kanban"]).default("table"),
+});
+
+export type CaTrackerFilterValues = z.infer<typeof caTrackerFilterSchema>;
+
+export function parseCaTrackerSearchParams(
+  params: Record<string, string | string[] | undefined>,
+): CaTrackerFilterValues {
+  const pick = (key: string) => {
+    const value = params[key];
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+  const status = pick("status");
+  const priority = pick("priority");
+  const view = pick("view");
+  const parsed = caTrackerFilterSchema.safeParse({
+    status: status && (CA_STATUSES as readonly string[]).includes(status) ? status : undefined,
+    assigneeId: pick("assigneeId") || undefined,
+    priority: priority && (CA_PRIORITIES as readonly string[]).includes(priority) ? priority : undefined,
+    locationId: pick("locationId") || undefined,
+    dueFrom: pick("dueFrom") || undefined,
+    dueTo: pick("dueTo") || undefined,
+    view: view === "kanban" ? "kanban" : "table",
+  });
+  if (parsed.success) return parsed.data;
+  return { view: "table" };
+}
+
+export const NOTIFICATION_TYPES = [
+  "INCIDENT_SUBMITTED",
+  "INCIDENT_ESCALATED",
+  "INCIDENT_VERIFIED",
+  "INCIDENT_REJECTED",
+  "INCIDENT_CLOSED",
+  "SLA_WARNING",
+  "SLA_OVERDUE",
+  "CA_ASSIGNED",
+  "CA_DUE_SOON",
+  "CA_OVERDUE",
+  "REPORT_READY",
+] as const;
+
+export const notificationTypeLabels: Record<(typeof NOTIFICATION_TYPES)[number], string> = {
+  INCIDENT_SUBMITTED: "Laporan baru disubmit",
+  INCIDENT_ESCALATED: "Insiden dieskalasi",
+  INCIDENT_VERIFIED: "Laporan diverifikasi",
+  INCIDENT_REJECTED: "Laporan dikembalikan",
+  INCIDENT_CLOSED: "Laporan ditutup",
+  SLA_WARNING: "SLA hampir habis",
+  SLA_OVERDUE: "SLA terlewat",
+  CA_ASSIGNED: "Corrective action di-assign",
+  CA_DUE_SOON: "CA mendekati tenggat",
+  CA_OVERDUE: "CA overdue",
+  REPORT_READY: "Laporan siap diunduh",
+};

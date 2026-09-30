@@ -4,7 +4,7 @@ import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tan
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 
-import { IncidentCard, isUrgentIncident } from "@/components/incidents/IncidentCard";
+import { IncidentCard } from "@/components/incidents/IncidentCard";
 import { SeverityBadge, StatusBadge } from "@/components/shared/StatusBadge";
 import {
   Table,
@@ -17,6 +17,7 @@ import {
 import { formatDateTime } from "@/lib/datetime";
 import type { Incident } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { incidentUrgency, urgencyRowClass } from "@/lib/urgency";
 
 export function IncidentTable({
   items,
@@ -108,7 +109,7 @@ export function IncidentTable({
                 key={row.id}
                 className={cn(
                   "h-12 cursor-pointer hover:bg-canvas",
-                  isUrgentIncident(row.original) && "border-l-[3px] border-l-danger-500",
+                  urgencyRowClass(incidentUrgency(row.original)),
                 )}
                 onClick={() => router.push(`/incidents/${row.original.id}`)}
               >

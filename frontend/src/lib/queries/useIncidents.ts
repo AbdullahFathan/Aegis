@@ -185,10 +185,13 @@ export function useStartCorrectiveAction() {
 export function useUploadIncidentFiles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; files: File[] }) => {
+    mutationFn: async (input: { id: string; files: File[]; correctiveActionId?: string }) => {
       const body = new FormData();
       for (const file of input.files) {
         body.append("files", file);
+      }
+      if (input.correctiveActionId) {
+        body.append("correctiveActionId", input.correctiveActionId);
       }
       return api<IncidentFile[]>(`/incidents/${input.id}/files`, { method: "POST", body });
     },

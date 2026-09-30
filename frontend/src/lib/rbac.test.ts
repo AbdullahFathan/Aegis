@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { canSeeNavItem, workflowActionsFor, type NavItem } from "@/lib/rbac";
+import {
+  canSeeNavItem,
+  canUpdateCAStatus,
+  canVerifyCA,
+  canWriteCA,
+  canWriteRca,
+  workflowActionsFor,
+  type NavItem,
+} from "@/lib/rbac";
 import { ROLES } from "@/lib/schemas";
 
 const items: NavItem[] = [
@@ -64,5 +72,25 @@ describe("workflowActionsFor", () => {
   it("hides close from admin and reporter", () => {
     expect(workflowActionsFor("ADMIN", "UNDER_INVESTIGATION")).toEqual([]);
     expect(workflowActionsFor("REPORTER", "CORRECTIVE_ACTION")).toEqual([]);
+  });
+});
+
+describe("CA and RCA permissions", () => {
+  it("lets HSE officer verify CA and write RCA before close", () => {
+    expect(canVerifyCA("HSE_OFFICER")).toBe(true);
+    expect(canWriteCA("HSE_OFFICER")).toBe(true);
+    expect(canWriteRca("HSE_OFFICER", "UNDER_INVESTIGATION")).toBe(true);
+  });
+
+  it("blocks RCA after close and blocks reporter verify", () => {
+    expect(canWriteRca("HSE_MANAGER", "CLOSED")).toBe(false);
+    expect(canVerifyCA("REPORTER")).toBe(false);
+    expect(canWriteCA("SUPERVISOR")).toBe(false);
+  });
+
+  it("lets the assignee update CA status", () => {
+    expect(canUpdateCAStatus("REPORTER", "u1", "u1")).toBe(true);
+    expect(canUpdateCAStatus("REPORTER", "u1", "u2")).toBe(false);
+    expect(canUpdateCAStatus("HSE_OFFICER", "u1", "u2")).toBe(true);
   });
 });
