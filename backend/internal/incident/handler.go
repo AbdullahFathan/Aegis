@@ -108,7 +108,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		f.To = &t
 	}
-	items, total, err := h.Service.List(actor, f)
+	items, total, err := h.Service.List(r.Context(), actor, f)
 	if err != nil {
 		WriteErr(w, err)
 		return
@@ -210,7 +210,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid id")
 		return
 	}
-	row, err := h.Service.Get(id, actor)
+	row, err := h.Service.Get(r.Context(), id, actor)
 	if err != nil {
 		WriteErr(w, err)
 		return
@@ -329,6 +329,8 @@ func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
 
 func WriteErr(w http.ResponseWriter, err error) {
 	switch {
+	case database.IsTimeout(err):
+		_ = response.Error(w, http.StatusGatewayTimeout, "TIMEOUT", "request timed out")
 	case errors.Is(err, ErrValidation):
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", errDetail(err, ErrValidation, "invalid payload"))
 	case errors.Is(err, ErrForbidden):

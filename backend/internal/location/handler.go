@@ -72,8 +72,11 @@ func areaView(a database.Area) map[string]any {
 // @Security     BearerAuth
 // @Router       /regions [get]
 func (h *Handler) ListRegions(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Service.ListRegions()
+	items, err := h.Service.ListRegions(r.Context())
 	if err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}
@@ -120,8 +123,11 @@ func (h *Handler) CreateRegion(w http.ResponseWriter, r *http.Request) {
 // @Security     BearerAuth
 // @Router       /locations [get]
 func (h *Handler) ListLocations(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Service.ListLocations()
+	items, err := h.Service.ListLocations(r.Context())
 	if err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}
@@ -248,7 +254,7 @@ func (h *Handler) ListAreas(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid id")
 		return
 	}
-	items, err := h.Service.ListAreas(id)
+	items, err := h.Service.ListAreas(r.Context(), id)
 	if err != nil {
 		writeLocErr(w, err)
 		return
@@ -337,6 +343,9 @@ func writeLocErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		_ = response.Error(w, http.StatusNotFound, "NOT_FOUND", "location not found")
 	default:
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 }

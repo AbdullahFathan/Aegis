@@ -86,7 +86,7 @@ func TestListFilterStatusChangedAndCSV(t *testing.T) {
 		EntityType: "Incident", EntityID: "1", Action: database.AuditStatusChanged,
 		Before: map[string]any{"status": "DRAFT"}, After: map[string]any{"status": "PENDING_REVIEW"},
 	}))
-	rows, total, err := repo.List(ListFilter{Action: string(database.AuditStatusChanged)})
+	rows, total, err := repo.List(context.Background(), ListFilter{Action: string(database.AuditStatusChanged)})
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, rows, 1)

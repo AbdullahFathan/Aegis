@@ -62,7 +62,7 @@ func TestLTIFRUsesWorkHoursAndCSVShape(t *testing.T) {
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 9, 30, 23, 59, 59, 0, time.UTC)
 	svc := &report.Service{DB: db, Queue: &report.MemoryQueue{}, Store: storage.NewMemory(), PDF: aegispdf.Static{Bytes: []byte("%PDF-ok")}}
-	_, err := svc.UpsertWorkHours(nil, from, to, 1_000_000)
+	_, err := svc.UpsertWorkHours(context.Background(), nil, from, to, 1_000_000)
 	require.NoError(t, err)
 	for i := 0; i < 2; i++ {
 		require.NoError(t, db.Create(&database.Incident{
@@ -73,7 +73,7 @@ func TestLTIFRUsesWorkHoursAndCSVShape(t *testing.T) {
 		}).Error)
 	}
 	actor := authctx.Principal{ID: mgr.ID, Role: mgr.Role}
-	out, err := svc.LTIFR(actor, report.QueryFilter{From: &from, To: &to})
+	out, err := svc.LTIFR(context.Background(), actor, report.QueryFilter{From: &from, To: &to})
 	require.NoError(t, err)
 	require.Equal(t, int64(2), out.LTICount)
 	require.Equal(t, 2.0, out.LTIFR)
@@ -84,7 +84,7 @@ func TestLTIFRUsesWorkHoursAndCSVShape(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(b), `"x,y"`)
 
-	_, err = svc.LTIFR(actor, report.QueryFilter{
+	_, err = svc.LTIFR(context.Background(), actor, report.QueryFilter{
 		From: ptrTime(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
 		To:   ptrTime(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)),
 	})
@@ -123,7 +123,7 @@ func TestEnqueueProcessAndFailedPDFLeavesIncident(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, database.ReportPending, job.Status)
 	require.NoError(t, svc.ProcessPending(context.Background(), 5))
-	got, url, err := svc.GetJob(job.ID, actor)
+	got, url, err := svc.GetJob(context.Background(), job.ID, actor)
 	require.NoError(t, err)
 	require.Equal(t, database.ReportDone, got.Status)
 	require.NotNil(t, got.StoredKey)
@@ -134,7 +134,7 @@ func TestEnqueueProcessAndFailedPDFLeavesIncident(t *testing.T) {
 	job2, err := fail.EnqueuePDF(context.Background(), actor, database.ReportMonthly, report.QueryFilter{From: &from, To: &to}, nil)
 	require.NoError(t, err)
 	require.NoError(t, fail.ProcessPending(context.Background(), 5))
-	failed, _, err := fail.GetJob(job2.ID, actor)
+	failed, _, err := fail.GetJob(context.Background(), job2.ID, actor)
 	require.NoError(t, err)
 	require.Equal(t, database.ReportFailed, failed.Status)
 	var still database.Incident
@@ -191,7 +191,7 @@ func TestOfficerCannotSeeOtherSiteMonthly(t *testing.T) {
 	svc := &report.Service{DB: db}
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
-	items, err := svc.MonthlyRows(authctx.Principal{ID: offA.ID, Role: offA.Role}, report.QueryFilter{From: &from, To: &to})
+	items, err := svc.MonthlyRows(context.Background(), authctx.Principal{ID: offA.ID, Role: offA.Role}, report.QueryFilter{From: &from, To: &to})
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, locA.ID, items[0].LocationID)

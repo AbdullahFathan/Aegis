@@ -24,6 +24,15 @@ type Config struct {
 	CompanyName        string
 	SuperadminUsername string
 	SuperadminPassword string
+	DBAPITimeout       time.Duration
+	DBReportTimeout    time.Duration
+	DBUploadTimeout    time.Duration
+	DBJobTimeout       time.Duration
+	DBPingTimeout      time.Duration
+	DBStatementTimeout time.Duration
+	DBMaxOpenConns     int
+	DBMaxIdleConns     int
+	DBConnMaxLifetime  time.Duration
 }
 
 func Load() Config {
@@ -44,6 +53,15 @@ func Load() Config {
 		CompanyName:        env("COMPANY_NAME", "Aegis"),
 		SuperadminUsername: os.Getenv("SUPERADMIN_USERNAME"),
 		SuperadminPassword: os.Getenv("SUPERADMIN_PASSWORD"),
+		DBAPITimeout:       envDuration("DB_API_TIMEOUT", 5*time.Second),
+		DBReportTimeout:    envDuration("DB_REPORT_TIMEOUT", 30*time.Second),
+		DBUploadTimeout:    envDuration("DB_UPLOAD_TIMEOUT", 60*time.Second),
+		DBJobTimeout:       envDuration("DB_JOB_TIMEOUT", 50*time.Second),
+		DBPingTimeout:      envDuration("DB_PING_TIMEOUT", 2*time.Second),
+		DBStatementTimeout: envDuration("DB_STATEMENT_TIMEOUT", 60*time.Second),
+		DBMaxOpenConns:     envInt("DB_MAX_OPEN_CONNS", 25),
+		DBMaxIdleConns:     envInt("DB_MAX_IDLE_CONNS", 5),
+		DBConnMaxLifetime:  envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
 	}
 }
 
@@ -64,6 +82,18 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+func envInt(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 func envBool(key string, fallback bool) bool {

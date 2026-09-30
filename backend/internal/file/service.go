@@ -55,18 +55,18 @@ func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Uplo
 	if len(files) > storage.MaxFilesPerRequest {
 		return nil, incident.WrapValidation("maximum 5 files per request")
 	}
-	inc, loc, err := s.loadVisible(incidentID, actor)
+	inc, loc, err := s.loadVisible(ctx, incidentID, actor)
 	if err != nil {
 		return nil, err
 	}
-	if !s.canUpload(actor, inc, loc, caID) {
+	if !s.canUpload(ctx, actor, inc, loc, caID) {
 		return nil, incident.ErrForbidden
 	}
 	var caPtr *uuid.UUID
 	ctxType := database.FileIncidentEvidence
 	if caID != nil {
 		var ca database.CorrectiveAction
-		if err := s.Repo.DB.First(&ca, "id = ?", *caID).Error; err != nil || ca.IncidentID != incidentID {
+		if err := database.With(ctx, s.Repo.DB).First(&ca, "id = ?", *caID).Error; err != nil || ca.IncidentID != incidentID {
 			return nil, incident.WrapValidation("correctiveActionId does not belong to incident")
 		}
 		caPtr = caID
@@ -105,10 +105,11 @@ func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Uplo
 			SizeBytes:          int64(len(f.Content)),
 			Context:            ctxType,
 		}
-		if err := s.Repo.CreateFile(&row); err != nil {
+		if err := s.Repo.CreateFile(ctx, &row); err != nil {
 			return nil, err
 		}
-		_ = s.Audit.Insert(ctx, auditlog.Entry{
+		actx, cancel := database.AfterCommit(ctx)
+		_ = s.Audit.Insert(actx, auditlog.Entry{
 			UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 			EntityType: "IncidentFile", EntityID: row.ID.String(),
 			Action: database.AuditFileUploaded,
@@ -119,16 +120,17 @@ func (s *Service) Upload(ctx context.Context, incidentID uuid.UUID, files []Uplo
 				"sizeBytes":  row.SizeBytes,
 			},
 		})
+		cancel()
 		out = append(out, row)
 	}
 	return out, nil
 }
 
 func (s *Service) List(ctx context.Context, incidentID uuid.UUID, actor authctx.Principal) ([]map[string]any, error) {
-	if _, _, err := s.loadVisible(incidentID, actor); err != nil {
+	if _, _, err := s.loadVisible(ctx, incidentID, actor); err != nil {
 		return nil, err
 	}
-	items, err := s.Repo.ListFiles(incidentID)
+	items, err := s.Repo.ListFiles(ctx, incidentID)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +157,8 @@ func (s *Service) List(ctx context.Context, incidentID uuid.UUID, actor authctx.
 	return out, nil
 }
 
-func (s *Service) Delete(incidentID, fileID uuid.UUID, actor authctx.Principal) error {
-	inc, loc, err := s.loadVisible(incidentID, actor)
+func (s *Service) Delete(ctx context.Context, incidentID, fileID uuid.UUID, actor authctx.Principal) error {
+	inc, loc, err := s.loadVisible(ctx, incidentID, actor)
 	if err != nil {
 		return err
 	}
@@ -167,23 +169,23 @@ func (s *Service) Delete(incidentID, fileID uuid.UUID, actor authctx.Principal) 
 		return incident.ErrForbidden
 	}
 	_ = loc
-	f, err := s.Repo.FindFile(fileID)
+	f, err := s.Repo.FindFile(ctx, fileID)
 	if err != nil {
 		return err
 	}
 	if f.IncidentID != incidentID {
 		return incident.ErrNotFound
 	}
-	return s.Repo.DeleteFile(fileID)
+	return s.Repo.DeleteFile(ctx, fileID)
 }
 
-func (s *Service) canUpload(actor authctx.Principal, inc database.Incident, loc database.Location, caID *uuid.UUID) bool {
+func (s *Service) canUpload(ctx context.Context, actor authctx.Principal, inc database.Incident, loc database.Location, caID *uuid.UUID) bool {
 	if inc.Status == database.StatusClosed {
 		return false
 	}
 	if caID != nil {
 		var ca database.CorrectiveAction
-		if err := s.Repo.DB.First(&ca, "id = ?", *caID).Error; err == nil && ca.IncidentID == inc.ID && ca.AssigneeID == actor.ID {
+		if err := database.With(ctx, s.Repo.DB).First(&ca, "id = ?", *caID).Error; err == nil && ca.IncidentID == inc.ID && ca.AssigneeID == actor.ID {
 			return true
 		}
 	}
@@ -203,12 +205,12 @@ func (s *Service) canWrite(actor authctx.Principal, inc database.Incident, loc d
 	return actor.Role == database.RoleHSEOfficer && incscope.IsLocationOfficer(actor, loc)
 }
 
-func (s *Service) loadVisible(id uuid.UUID, actor authctx.Principal) (database.Incident, database.Location, error) {
-	inc, err := s.Repo.Find(id)
+func (s *Service) loadVisible(ctx context.Context, id uuid.UUID, actor authctx.Principal) (database.Incident, database.Location, error) {
+	inc, err := s.Repo.Find(ctx, id)
 	if err != nil {
 		return database.Incident{}, database.Location{}, err
 	}
-	loc, err := s.Repo.FindLocation(inc.LocationID)
+	loc, err := s.Repo.FindLocation(ctx, inc.LocationID)
 	if err != nil {
 		return database.Incident{}, database.Location{}, err
 	}

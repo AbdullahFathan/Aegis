@@ -39,8 +39,8 @@ type UpsertInput struct {
 	Completed         bool
 }
 
-func (s *Service) Get(incidentID uuid.UUID, actor authctx.Principal) (database.RootCauseAnalysis, error) {
-	inc, loc, err := s.loadIncident(incidentID)
+func (s *Service) Get(ctx context.Context, incidentID uuid.UUID, actor authctx.Principal) (database.RootCauseAnalysis, error) {
+	inc, loc, err := s.loadIncident(ctx, incidentID)
 	if err != nil {
 		return database.RootCauseAnalysis{}, err
 	}
@@ -48,7 +48,7 @@ func (s *Service) Get(incidentID uuid.UUID, actor authctx.Principal) (database.R
 		return database.RootCauseAnalysis{}, incident.ErrNotFound
 	}
 	var row database.RootCauseAnalysis
-	err = s.DB.Where("incident_id = ?", incidentID).First(&row).Error
+	err = database.With(ctx, s.DB).Where("incident_id = ?", incidentID).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.RootCauseAnalysis{}, incident.ErrNotFound
 	}
@@ -59,7 +59,7 @@ func (s *Service) Upsert(ctx context.Context, incidentID uuid.UUID, in UpsertInp
 	if len(in.FiveWhys) > 5 {
 		return database.RootCauseAnalysis{}, incident.WrapValidation("fiveWhys supports at most 5 entries")
 	}
-	inc, loc, err := s.loadIncident(incidentID)
+	inc, loc, err := s.loadIncident(ctx, incidentID)
 	if err != nil {
 		return database.RootCauseAnalysis{}, err
 	}
@@ -74,7 +74,7 @@ func (s *Service) Upsert(ctx context.Context, incidentID uuid.UUID, in UpsertInp
 	}
 
 	var existing database.RootCauseAnalysis
-	err = s.DB.Where("incident_id = ?", incidentID).First(&existing).Error
+	err = database.With(ctx, s.DB).Where("incident_id = ?", incidentID).First(&existing).Error
 	found := err == nil
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.RootCauseAnalysis{}, err
@@ -98,11 +98,11 @@ func (s *Service) Upsert(ctx context.Context, incidentID uuid.UUID, in UpsertInp
 	}
 
 	if found {
-		if err := s.DB.Save(&row).Error; err != nil {
+		if err := database.With(ctx, s.DB).Save(&row).Error; err != nil {
 			return database.RootCauseAnalysis{}, err
 		}
 	} else {
-		if err := s.DB.Create(&row).Error; err != nil {
+		if err := database.With(ctx, s.DB).Create(&row).Error; err != nil {
 			return database.RootCauseAnalysis{}, err
 		}
 	}
@@ -110,7 +110,9 @@ func (s *Service) Upsert(ctx context.Context, incidentID uuid.UUID, in UpsertInp
 	if !found {
 		action = database.AuditCreated
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "RootCauseAnalysis", EntityID: row.ID.String(),
 		Action: action, Before: before, After: snapshotRCA(row),
@@ -118,9 +120,9 @@ func (s *Service) Upsert(ctx context.Context, incidentID uuid.UUID, in UpsertInp
 	return row, nil
 }
 
-func (s *Service) GetTemplate(category database.IncidentCategory) (database.RCATemplate, error) {
+func (s *Service) GetTemplate(ctx context.Context, category database.IncidentCategory) (database.RCATemplate, error) {
 	var row database.RCATemplate
-	err := s.DB.Where("category = ?", category).First(&row).Error
+	err := database.With(ctx, s.DB).Where("category = ?", category).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.RCATemplate{}, incident.ErrNotFound
 	}
@@ -135,7 +137,7 @@ func (s *Service) PutTemplate(ctx context.Context, category database.IncidentCat
 		return database.RCATemplate{}, incident.WrapValidation("fiveWhys supports at most 5 entries")
 	}
 	var row database.RCATemplate
-	err := s.DB.Where("category = ?", category).First(&row).Error
+	err := database.With(ctx, s.DB).Where("category = ?", category).First(&row).Error
 	found := err == nil
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.RCATemplate{}, err
@@ -145,15 +147,17 @@ func (s *Service) PutTemplate(ctx context.Context, category database.IncidentCat
 	}
 	row.Payload = payload
 	if found {
-		if err := s.DB.Save(&row).Error; err != nil {
+		if err := database.With(ctx, s.DB).Save(&row).Error; err != nil {
 			return database.RCATemplate{}, err
 		}
 	} else {
-		if err := s.DB.Create(&row).Error; err != nil {
+		if err := database.With(ctx, s.DB).Create(&row).Error; err != nil {
 			return database.RCATemplate{}, err
 		}
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "RCATemplate", EntityID: row.ID.String(),
 		Action: database.AuditUpdated, After: map[string]any{"category": string(category)},
@@ -168,9 +172,9 @@ func (s *Service) canWrite(actor authctx.Principal, loc database.Location) bool 
 	return actor.Role == database.RoleHSEOfficer && incscope.IsLocationOfficer(actor, loc)
 }
 
-func (s *Service) loadIncident(id uuid.UUID) (database.Incident, database.Location, error) {
+func (s *Service) loadIncident(ctx context.Context, id uuid.UUID) (database.Incident, database.Location, error) {
 	var inc database.Incident
-	err := s.DB.First(&inc, "id = ?", id).Error
+	err := database.With(ctx, s.DB).First(&inc, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.Incident{}, database.Location{}, incident.ErrNotFound
 	}
@@ -178,7 +182,7 @@ func (s *Service) loadIncident(id uuid.UUID) (database.Incident, database.Locati
 		return database.Incident{}, database.Location{}, err
 	}
 	var loc database.Location
-	if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 		return database.Incident{}, database.Location{}, err
 	}
 	return inc, loc, nil

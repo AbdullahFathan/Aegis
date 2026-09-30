@@ -33,10 +33,12 @@ func (s *Service) CreateRegion(ctx context.Context, name, code string, actor aut
 		return database.Region{}, ErrValidation
 	}
 	row := database.Region{Name: name, Code: code}
-	if err := s.Repo.CreateRegion(&row); err != nil {
+	if err := s.Repo.CreateRegion(ctx, &row); err != nil {
 		return database.Region{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Region", EntityID: row.ID.String(), Action: database.AuditCreated,
 		After: map[string]any{"name": row.Name, "code": row.Code},
@@ -44,8 +46,8 @@ func (s *Service) CreateRegion(ctx context.Context, name, code string, actor aut
 	return row, nil
 }
 
-func (s *Service) ListRegions() ([]database.Region, error) {
-	return s.Repo.ListRegions()
+func (s *Service) ListRegions(ctx context.Context) ([]database.Region, error) {
+	return s.Repo.ListRegions(ctx)
 }
 
 type LocationInput struct {
@@ -63,16 +65,16 @@ func (s *Service) CreateLocation(ctx context.Context, in LocationInput, actor au
 	if in.Name == "" || in.Code == "" || !validType(in.Type) || in.SupervisorID == uuid.Nil || in.HSEOfficerID == uuid.Nil {
 		return database.Location{}, ErrValidation
 	}
-	ok, err := s.Repo.UserExists(in.SupervisorID)
+	ok, err := s.Repo.UserExists(ctx, in.SupervisorID)
 	if err != nil || !ok {
 		return database.Location{}, ErrValidation
 	}
-	ok, err = s.Repo.UserExists(in.HSEOfficerID)
+	ok, err = s.Repo.UserExists(ctx, in.HSEOfficerID)
 	if err != nil || !ok {
 		return database.Location{}, ErrValidation
 	}
 	if in.RegionID != nil {
-		ok, err = s.Repo.RegionExists(*in.RegionID)
+		ok, err = s.Repo.RegionExists(ctx, *in.RegionID)
 		if err != nil || !ok {
 			return database.Location{}, ErrValidation
 		}
@@ -86,10 +88,12 @@ func (s *Service) CreateLocation(ctx context.Context, in LocationInput, actor au
 		HSEOfficerID: in.HSEOfficerID,
 		IsActive:     true,
 	}
-	if err := s.Repo.CreateLocation(&row); err != nil {
+	if err := s.Repo.CreateLocation(ctx, &row); err != nil {
 		return database.Location{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Location", EntityID: row.ID.String(), Action: database.AuditCreated,
 		After: map[string]any{"name": row.Name, "code": row.Code, "type": row.Type},
@@ -98,7 +102,7 @@ func (s *Service) CreateLocation(ctx context.Context, in LocationInput, actor au
 }
 
 func (s *Service) PatchLocation(ctx context.Context, id uuid.UUID, in LocationInput, actor authctx.Principal, ip string) (database.Location, error) {
-	row, err := s.Repo.FindLocation(id)
+	row, err := s.Repo.FindLocation(ctx, id)
 	if err != nil {
 		return database.Location{}, err
 	}
@@ -118,30 +122,32 @@ func (s *Service) PatchLocation(ctx context.Context, id uuid.UUID, in LocationIn
 		row.Type = in.Type
 	}
 	if in.SupervisorID != uuid.Nil {
-		ok, err := s.Repo.UserExists(in.SupervisorID)
+		ok, err := s.Repo.UserExists(ctx, in.SupervisorID)
 		if err != nil || !ok {
 			return database.Location{}, ErrValidation
 		}
 		row.SupervisorID = in.SupervisorID
 	}
 	if in.HSEOfficerID != uuid.Nil {
-		ok, err := s.Repo.UserExists(in.HSEOfficerID)
+		ok, err := s.Repo.UserExists(ctx, in.HSEOfficerID)
 		if err != nil || !ok {
 			return database.Location{}, ErrValidation
 		}
 		row.HSEOfficerID = in.HSEOfficerID
 	}
 	if in.RegionID != nil {
-		ok, err := s.Repo.RegionExists(*in.RegionID)
+		ok, err := s.Repo.RegionExists(ctx, *in.RegionID)
 		if err != nil || !ok {
 			return database.Location{}, ErrValidation
 		}
 		row.RegionID = in.RegionID
 	}
-	if err := s.Repo.SaveLocation(&row); err != nil {
+	if err := s.Repo.SaveLocation(ctx, &row); err != nil {
 		return database.Location{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Location", EntityID: row.ID.String(), Action: database.AuditUpdated,
 		Before: before,
@@ -151,16 +157,18 @@ func (s *Service) PatchLocation(ctx context.Context, id uuid.UUID, in LocationIn
 }
 
 func (s *Service) Deactivate(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip string) (database.Location, error) {
-	row, err := s.Repo.FindLocation(id)
+	row, err := s.Repo.FindLocation(ctx, id)
 	if err != nil {
 		return database.Location{}, err
 	}
 	before := map[string]any{"isActive": row.IsActive}
 	row.IsActive = false
-	if err := s.Repo.SaveLocation(&row); err != nil {
+	if err := s.Repo.SaveLocation(ctx, &row); err != nil {
 		return database.Location{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Location", EntityID: row.ID.String(), Action: database.AuditUpdated,
 		Before: before, After: map[string]any{"isActive": false},
@@ -168,12 +176,12 @@ func (s *Service) Deactivate(ctx context.Context, id uuid.UUID, actor authctx.Pr
 	return row, nil
 }
 
-func (s *Service) ListLocations() ([]database.Location, error) {
-	return s.Repo.ListLocations()
+func (s *Service) ListLocations(ctx context.Context) ([]database.Location, error) {
+	return s.Repo.ListLocations(ctx)
 }
 
 func (s *Service) CreateArea(ctx context.Context, locationID uuid.UUID, name, code string, actor authctx.Principal, ip string) (database.Area, error) {
-	if _, err := s.Repo.FindLocation(locationID); err != nil {
+	if _, err := s.Repo.FindLocation(ctx, locationID); err != nil {
 		return database.Area{}, err
 	}
 	name = strings.TrimSpace(name)
@@ -182,10 +190,12 @@ func (s *Service) CreateArea(ctx context.Context, locationID uuid.UUID, name, co
 		return database.Area{}, ErrValidation
 	}
 	row := database.Area{Name: name, Code: code, LocationID: locationID}
-	if err := s.Repo.CreateArea(&row); err != nil {
+	if err := s.Repo.CreateArea(ctx, &row); err != nil {
 		return database.Area{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Area", EntityID: row.ID.String(), Action: database.AuditCreated,
 		After: map[string]any{"name": row.Name, "code": row.Code, "locationId": locationID.String()},
@@ -193,9 +203,9 @@ func (s *Service) CreateArea(ctx context.Context, locationID uuid.UUID, name, co
 	return row, nil
 }
 
-func (s *Service) ListAreas(locationID uuid.UUID) ([]database.Area, error) {
-	if _, err := s.Repo.FindLocation(locationID); err != nil {
+func (s *Service) ListAreas(ctx context.Context, locationID uuid.UUID) ([]database.Area, error) {
+	if _, err := s.Repo.FindLocation(ctx, locationID); err != nil {
 		return nil, err
 	}
-	return s.Repo.ListAreas(locationID)
+	return s.Repo.ListAreas(ctx, locationID)
 }

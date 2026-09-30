@@ -35,7 +35,7 @@ func toView(u database.User) UserView {
 }
 
 func (s *Service) Login(ctx context.Context, email, password string) (TokenResponse, string, error) {
-	u, err := s.Users.FindByEmail(strings.TrimSpace(strings.ToLower(email)))
+	u, err := s.Users.FindByEmail(ctx, strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return TokenResponse{}, "", ErrInvalidCredentials
@@ -57,7 +57,7 @@ func (s *Service) Refresh(ctx context.Context, raw string) (TokenResponse, strin
 		return TokenResponse{}, "", ErrRefreshNotFound
 	}
 	_ = s.Store.Delete(ctx, raw)
-	u, err := s.Users.FindByID(userID)
+	u, err := s.Users.FindByID(ctx, userID)
 	if err != nil || u.Status != database.UserStatusActive {
 		return TokenResponse{}, "", ErrRefreshNotFound
 	}
@@ -71,8 +71,8 @@ func (s *Service) Logout(ctx context.Context, raw string) error {
 	return s.Store.Delete(ctx, raw)
 }
 
-func (s *Service) Me(id uuid.UUID) (UserView, error) {
-	u, err := s.Users.FindByID(id)
+func (s *Service) Me(ctx context.Context, id uuid.UUID) (UserView, error) {
+	u, err := s.Users.FindByID(ctx, id)
 	if err != nil {
 		return UserView{}, err
 	}

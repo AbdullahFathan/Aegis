@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"time"
 
 	"aegis/internal/report"
@@ -72,8 +73,8 @@ func (s *Service) window(f Filter) (from, to time.Time) {
 	return from, to
 }
 
-func (s *Service) incidentQ(f Filter, from, to time.Time) *gorm.DB {
-	q := s.DB.Model(&database.Incident{}).Where("status <> ?", database.StatusDraft)
+func (s *Service) incidentQ(ctx context.Context, f Filter, from, to time.Time) *gorm.DB {
+	q := database.With(ctx, s.DB).Model(&database.Incident{}).Where("status <> ?", database.StatusDraft)
 	if f.LocationID != nil {
 		q = q.Where("location_id = ?", *f.LocationID)
 	}
@@ -84,17 +85,17 @@ func (s *Service) incidentQ(f Filter, from, to time.Time) *gorm.DB {
 	return q
 }
 
-func (s *Service) Summary(f Filter) (Summary, error) {
+func (s *Service) Summary(ctx context.Context, f Filter) (Summary, error) {
 	from, to := s.window(f)
 	monthStart := time.Date(from.UTC().Year(), from.UTC().Month(), 1, 0, 0, 0, 0, time.UTC)
 	prevFrom := monthStart.AddDate(0, -1, 0)
 	prevTo := monthStart.Add(-time.Nanosecond)
 
-	thisN, err := s.countIncidents(f, from, to)
+	thisN, err := s.countIncidents(ctx, f, from, to)
 	if err != nil {
 		return Summary{}, err
 	}
-	lastN, err := s.countIncidents(f, prevFrom, prevTo)
+	lastN, err := s.countIncidents(ctx, f, prevFrom, prevTo)
 	if err != nil {
 		return Summary{}, err
 	}
@@ -105,11 +106,11 @@ func (s *Service) Summary(f Filter) (Summary, error) {
 		trend = "down"
 	}
 
-	pipe, err := s.pipeline(f, from, to)
+	pipe, err := s.pipeline(ctx, f, from, to)
 	if err != nil {
 		return Summary{}, err
 	}
-	overdue, err := s.caOverdue(f, from, to)
+	overdue, err := s.caOverdue(ctx, f, from, to)
 	if err != nil {
 		return Summary{}, err
 	}
@@ -123,13 +124,13 @@ func (s *Service) Summary(f Filter) (Summary, error) {
 		Pipeline:       pipe,
 	}
 
-	hours, herr := report.ResolveHours(s.DB, from, to, f.LocationID)
+	hours, herr := report.ResolveHours(database.With(ctx, s.DB), from, to, f.LocationID)
 	if herr == nil {
-		lti, err := s.countCategory(f, from, to, database.CategoryLTI)
+		lti, err := s.countCategory(ctx, f, from, to, database.CategoryLTI)
 		if err != nil {
 			return Summary{}, err
 		}
-		rec, err := s.countRecordable(f, from, to)
+		rec, err := s.countRecordable(ctx, f, from, to)
 		if err != nil {
 			return Summary{}, err
 		}
@@ -142,33 +143,33 @@ func (s *Service) Summary(f Filter) (Summary, error) {
 	return out, nil
 }
 
-func (s *Service) countIncidents(f Filter, from, to time.Time) (int64, error) {
+func (s *Service) countIncidents(ctx context.Context, f Filter, from, to time.Time) (int64, error) {
 	var n int64
-	err := s.incidentQ(f, from, to).Count(&n).Error
+	err := s.incidentQ(ctx, f, from, to).Count(&n).Error
 	return n, err
 }
 
-func (s *Service) countCategory(f Filter, from, to time.Time, cat database.IncidentCategory) (int64, error) {
+func (s *Service) countCategory(ctx context.Context, f Filter, from, to time.Time, cat database.IncidentCategory) (int64, error) {
 	var n int64
-	err := s.incidentQ(f, from, to).Where("category = ?", cat).Count(&n).Error
+	err := s.incidentQ(ctx, f, from, to).Where("category = ?", cat).Count(&n).Error
 	return n, err
 }
 
-func (s *Service) countRecordable(f Filter, from, to time.Time) (int64, error) {
+func (s *Service) countRecordable(ctx context.Context, f Filter, from, to time.Time) (int64, error) {
 	var n int64
-	err := s.incidentQ(f, from, to).Where("category IN ?", []database.IncidentCategory{
+	err := s.incidentQ(ctx, f, from, to).Where("category IN ?", []database.IncidentCategory{
 		database.CategoryMedicalTreatment, database.CategoryLTI, database.CategoryFatality,
 	}).Count(&n).Error
 	return n, err
 }
 
-func (s *Service) pipeline(f Filter, from, to time.Time) (Pipeline, error) {
+func (s *Service) pipeline(ctx context.Context, f Filter, from, to time.Time) (Pipeline, error) {
 	type row struct {
 		Status database.IncidentStatus
 		N      int64
 	}
 	var rows []row
-	err := s.incidentQ(f, from, to).Select("status, count(*) as n").Group("status").Scan(&rows).Error
+	err := s.incidentQ(ctx, f, from, to).Select("status, count(*) as n").Group("status").Scan(&rows).Error
 	if err != nil {
 		return Pipeline{}, err
 	}
@@ -188,8 +189,8 @@ func (s *Service) pipeline(f Filter, from, to time.Time) (Pipeline, error) {
 	return p, nil
 }
 
-func (s *Service) caOverdue(f Filter, from, to time.Time) (int64, error) {
-	q := s.DB.Model(&database.CorrectiveAction{}).
+func (s *Service) caOverdue(ctx context.Context, f Filter, from, to time.Time) (int64, error) {
+	q := database.With(ctx, s.DB).Model(&database.CorrectiveAction{}).
 		Joins("JOIN incidents ON incidents.id = corrective_actions.incident_id AND incidents.deleted_at IS NULL").
 		Where("corrective_actions.status = ?", database.CAStatusOverdue).
 		Where("incidents.status <> ?", database.StatusDraft).
@@ -205,7 +206,7 @@ func (s *Service) caOverdue(f Filter, from, to time.Time) (int64, error) {
 	return n, err
 }
 
-func (s *Service) Trends(f Filter) ([]MonthBucket, error) {
+func (s *Service) Trends(ctx context.Context, f Filter) ([]MonthBucket, error) {
 	_, end := s.window(f)
 	endMonth := time.Date(end.Year(), end.Month(), 1, 0, 0, 0, 0, time.UTC)
 	out := make([]MonthBucket, 0, 12)
@@ -213,7 +214,7 @@ func (s *Service) Trends(f Filter) ([]MonthBucket, error) {
 		start := endMonth.AddDate(0, -i, 0)
 		next := start.AddDate(0, 1, 0)
 		to := next.Add(-time.Nanosecond)
-		n, err := s.countIncidents(f, start, to)
+		n, err := s.countIncidents(ctx, f, start, to)
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +223,7 @@ func (s *Service) Trends(f Filter) ([]MonthBucket, error) {
 	return out, nil
 }
 
-func (s *Service) Heatmap(f Filter) ([]HeatCell, error) {
+func (s *Service) Heatmap(ctx context.Context, f Filter) ([]HeatCell, error) {
 	from, to := s.window(f)
 	type row struct {
 		LocationID uuid.UUID
@@ -230,7 +231,7 @@ func (s *Service) Heatmap(f Filter) ([]HeatCell, error) {
 		Category   database.IncidentCategory
 		N          int64
 	}
-	q := s.DB.Model(&database.Incident{}).
+	q := database.With(ctx, s.DB).Model(&database.Incident{}).
 		Select("incidents.location_id as location_id, locations.code as code, incidents.category as category, count(*) as n").
 		Joins("JOIN locations ON locations.id = incidents.location_id").
 		Where("incidents.status <> ?", database.StatusDraft).

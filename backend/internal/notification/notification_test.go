@@ -107,7 +107,7 @@ func TestEmailOptIn(t *testing.T) {
 	svc.OnIncidentSubmitted(context.Background(), inc, loc)
 	require.Equal(t, 0, mail.n)
 
-	require.NoError(t, svc.SetEmailPreference(sup.ID, database.NotifIncidentSubmitted, true))
+	require.NoError(t, svc.SetEmailPreference(context.Background(), sup.ID, database.NotifIncidentSubmitted, true))
 	svc.OnIncidentSubmitted(context.Background(), inc, loc)
 	require.Equal(t, 1, mail.n)
 }

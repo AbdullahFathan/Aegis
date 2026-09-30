@@ -1,12 +1,14 @@
 package database_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"aegis/pkg/database"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -17,6 +19,34 @@ func testDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(db))
 	return db
+}
+
+func TestIsTimeout(t *testing.T) {
+	require.False(t, database.IsTimeout(nil))
+	require.True(t, database.IsTimeout(context.DeadlineExceeded))
+	require.True(t, database.IsTimeout(context.Canceled))
+	require.True(t, database.IsTimeout(&pgconn.PgError{Code: "57014", Message: "canceling statement due to user request"}))
+	require.False(t, database.IsTimeout(&pgconn.PgError{Code: "23505"}))
+}
+
+func TestCanceledContextDoesNotInsert(t *testing.T) {
+	db := testDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := database.With(ctx, db).Create(&database.User{
+		Email:        "late@example.com",
+		PasswordHash: "x",
+		Name:         "Late",
+		Role:         database.RoleReporter,
+		Status:       database.UserStatusActive,
+	}).Error
+	require.Error(t, err)
+	require.True(t, database.IsTimeout(err))
+
+	var n int64
+	require.NoError(t, db.Model(&database.User{}).Where("email = ?", "late@example.com").Count(&n).Error)
+	require.Zero(t, n)
 }
 
 func TestAutoMigrateIdempotent(t *testing.T) {

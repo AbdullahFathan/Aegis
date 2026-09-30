@@ -1,19 +1,53 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func OpenPostgres(dsn string) (*gorm.DB, error) {
+type Pool struct {
+	MaxOpenConns     int
+	MaxIdleConns     int
+	ConnMaxLifetime  time.Duration
+	StatementTimeout time.Duration
+}
+
+func OpenPostgres(dsn string, pool Pool) (*gorm.DB, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("DATABASE_DSN is empty")
 	}
-	return gorm.Open(postgres.Open(dsn), &gorm.Config{
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse database dsn: %w", err)
+	}
+	statementTimeout := pool.StatementTimeout
+	if statementTimeout <= 0 {
+		statementTimeout = 60 * time.Second
+	}
+	timeoutMS := strconv.FormatInt(statementTimeout.Milliseconds(), 10)
+	sqlDB := stdlib.OpenDB(*cfg, stdlib.OptionAfterConnect(func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SELECT set_config('statement_timeout', $1, false)", timeoutMS)
+		return err
+	}))
+	if pool.MaxOpenConns > 0 {
+		sqlDB.SetMaxOpenConns(pool.MaxOpenConns)
+	}
+	if pool.MaxIdleConns > 0 {
+		sqlDB.SetMaxIdleConns(pool.MaxIdleConns)
+	}
+	if pool.ConnMaxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(pool.ConnMaxLifetime)
+	}
+	return gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 }
@@ -54,10 +88,10 @@ func AutoMigrate(db *gorm.DB) error {
 	)
 }
 
-func Ping(db *gorm.DB) error {
+func Ping(ctx context.Context, db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return err
 	}
-	return sqlDB.Ping()
+	return sqlDB.PingContext(ctx)
 }

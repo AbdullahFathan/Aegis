@@ -68,7 +68,7 @@ func (s *Service) Dispatch(ctx context.Context, e Event) {
 			ReferenceType: e.ReferenceType,
 			ReferenceID:   e.ReferenceID,
 		}
-		if err := s.DB.Create(&row).Error; err != nil {
+		if err := database.With(ctx, s.DB).Create(&row).Error; err != nil {
 			if s.Log != nil {
 				s.Log.Error("notification_insert_failed", zap.Error(err))
 			}
@@ -80,12 +80,12 @@ func (s *Service) Dispatch(ctx context.Context, e Event) {
 
 func (s *Service) maybeEmail(ctx context.Context, userID uuid.UUID, e Event) {
 	var pref database.NotificationPreference
-	err := s.DB.Where("user_id = ? AND event_type = ?", userID, e.Type).First(&pref).Error
+	err := database.With(ctx, s.DB).Where("user_id = ? AND event_type = ?", userID, e.Type).First(&pref).Error
 	if err != nil || !pref.EmailEnabled {
 		return
 	}
 	var user database.User
-	if err := s.DB.First(&user, "id = ?", userID).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&user, "id = ?", userID).Error; err != nil {
 		return
 	}
 	if err := s.mailer().Send(ctx, user.Email, e.Title, e.Body); err != nil && s.Log != nil {
@@ -93,29 +93,29 @@ func (s *Service) maybeEmail(ctx context.Context, userID uuid.UUID, e Event) {
 	}
 }
 
-func (s *Service) SetEmailPreference(userID uuid.UUID, event database.NotificationType, enabled bool) error {
+func (s *Service) SetEmailPreference(ctx context.Context, userID uuid.UUID, event database.NotificationType, enabled bool) error {
 	var pref database.NotificationPreference
-	err := s.DB.Where("user_id = ? AND event_type = ?", userID, event).First(&pref).Error
+	err := database.With(ctx, s.DB).Where("user_id = ? AND event_type = ?", userID, event).First(&pref).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		pref = database.NotificationPreference{UserID: userID, EventType: event, EmailEnabled: enabled}
-		return s.DB.Create(&pref).Error
+		return database.With(ctx, s.DB).Create(&pref).Error
 	}
 	if err != nil {
 		return err
 	}
 	pref.EmailEnabled = enabled
-	return s.DB.Save(&pref).Error
+	return database.With(ctx, s.DB).Save(&pref).Error
 }
 
-func (s *Service) List(actor authctx.Principal) ([]database.Notification, error) {
+func (s *Service) List(ctx context.Context, actor authctx.Principal) ([]database.Notification, error) {
 	var items []database.Notification
-	err := s.DB.Where("recipient_id = ?", actor.ID).Order("created_at DESC").Find(&items).Error
+	err := database.With(ctx, s.DB).Where("recipient_id = ?", actor.ID).Order("created_at DESC").Find(&items).Error
 	return items, err
 }
 
-func (s *Service) MarkRead(id uuid.UUID, actor authctx.Principal) error {
+func (s *Service) MarkRead(ctx context.Context, id uuid.UUID, actor authctx.Principal) error {
 	var row database.Notification
-	err := s.DB.First(&row, "id = ?", id).Error
+	err := database.With(ctx, s.DB).First(&row, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return incident.ErrNotFound
 	}
@@ -123,12 +123,12 @@ func (s *Service) MarkRead(id uuid.UUID, actor authctx.Principal) error {
 		return incident.ErrForbidden
 	}
 	row.IsRead = true
-	return s.DB.Save(&row).Error
+	return database.With(ctx, s.DB).Save(&row).Error
 }
 
-func (s *Service) managerIDs() []uuid.UUID {
+func (s *Service) managerIDs(ctx context.Context) []uuid.UUID {
 	var users []database.User
-	_ = s.DB.Where("role = ? AND status = ?", database.RoleHSEManager, database.UserStatusActive).Find(&users).Error
+	_ = database.With(ctx, s.DB).Where("role = ? AND status = ?", database.RoleHSEManager, database.UserStatusActive).Find(&users).Error
 	ids := make([]uuid.UUID, 0, len(users))
 	for _, u := range users {
 		ids = append(ids, u.ID)
@@ -144,7 +144,7 @@ func (s *Service) OnIncidentSubmitted(ctx context.Context, inc database.Incident
 	}
 	if critical {
 		ids := []uuid.UUID{loc.SupervisorID, loc.HSEOfficerID}
-		ids = append(ids, s.managerIDs()...)
+		ids = append(ids, s.managerIDs(ctx)...)
 		s.Dispatch(ctx, Event{
 			Type: database.NotifIncidentEscalated, Priority: database.NotifCritical,
 			Title: title, Body: "Insiden LTI/Fatality memerlukan eskalasi.",
@@ -198,7 +198,7 @@ func (s *Service) OnCAAssigned(ctx context.Context, ca database.CorrectiveAction
 
 func (s *Service) OnCAOverdue(ctx context.Context, ca database.CorrectiveAction, loc database.Location) {
 	ids := []uuid.UUID{ca.AssigneeID, loc.HSEOfficerID}
-	ids = append(ids, s.managerIDs()...)
+	ids = append(ids, s.managerIDs(ctx)...)
 	s.Dispatch(ctx, Event{
 		Type: database.NotifCAOverdue, Priority: database.NotifHigh,
 		Title: "Corrective action overdue", Body: "CA melewati due date.",
@@ -224,7 +224,7 @@ func (s *Service) claim(ctx context.Context, key string, ttl time.Duration) bool
 
 func (s *Service) RunSLAReminders(ctx context.Context, now time.Time) error {
 	var items []database.Incident
-	err := s.DB.Where("status = ? AND pending_review_at IS NOT NULL", database.StatusPendingReview).Find(&items).Error
+	err := database.With(ctx, s.DB).Where("status = ? AND pending_review_at IS NOT NULL", database.StatusPendingReview).Find(&items).Error
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func (s *Service) RunSLAReminders(ctx context.Context, now time.Time) error {
 		}
 		elapsed := now.Sub(*inc.PendingReviewAt)
 		var loc database.Location
-		if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 			continue
 		}
 		if elapsed >= 24*time.Hour {

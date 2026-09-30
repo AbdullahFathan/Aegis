@@ -1,6 +1,7 @@
 package dashboard_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func TestSummaryMoMAndPipeline(t *testing.T) {
 	svc := &dashboard.Service{DB: db, Now: func() time.Time { return now }}
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	to := now
-	sum, err := svc.Summary(dashboard.Filter{From: &from, To: &to})
+	sum, err := svc.Summary(context.Background(), dashboard.Filter{From: &from, To: &to})
 	require.NoError(t, err)
 	require.Equal(t, int64(3), sum.ThisMonthCount)
 	require.Equal(t, int64(1), sum.LastMonthCount)
@@ -100,7 +101,7 @@ func TestTrendsAndHeatmapFilterSite(t *testing.T) {
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	to := now
 	f := dashboard.Filter{From: &from, To: &to, LocationID: &locA.ID}
-	tr, err := svc.Trends(f)
+	tr, err := svc.Trends(context.Background(), f)
 	require.NoError(t, err)
 	require.Len(t, tr, 12)
 	var sep int64
@@ -111,7 +112,7 @@ func TestTrendsAndHeatmapFilterSite(t *testing.T) {
 	}
 	require.Equal(t, int64(2), sep)
 
-	heat, err := svc.Heatmap(dashboard.Filter{From: &from, To: &to})
+	heat, err := svc.Heatmap(context.Background(), dashboard.Filter{From: &from, To: &to})
 	require.NoError(t, err)
 	require.Len(t, heat, 3)
 	codes := map[string]int64{}
@@ -122,7 +123,7 @@ func TestTrendsAndHeatmapFilterSite(t *testing.T) {
 	require.Equal(t, int64(1), codes["TMB-A:NEAR_MISS"])
 	require.Equal(t, int64(1), codes["TMB-B:LTI"])
 
-	heatA, err := svc.Heatmap(f)
+	heatA, err := svc.Heatmap(context.Background(), f)
 	require.NoError(t, err)
 	for _, c := range heatA {
 		require.Equal(t, locA.ID.String(), c.LocationID)
@@ -168,7 +169,7 @@ func BenchmarkDashboardSummary(b *testing.B) {
 	svc := &dashboard.Service{DB: db, Now: func() time.Time { return time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC) }}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := svc.Summary(dashboard.Filter{}); err != nil {
+		if _, err := svc.Summary(context.Background(), dashboard.Filter{}); err != nil {
 			b.Fatal(err)
 		}
 	}

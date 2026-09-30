@@ -34,7 +34,12 @@ func main() {
 	if cfg.DatabaseDSN == "" {
 		log.Fatal("database_dsn_empty")
 	}
-	db, err := database.OpenPostgres(cfg.DatabaseDSN)
+	db, err := database.OpenPostgres(cfg.DatabaseDSN, database.Pool{
+		MaxOpenConns:     cfg.DBMaxOpenConns,
+		MaxIdleConns:     cfg.DBMaxIdleConns,
+		ConnMaxLifetime:  cfg.DBConnMaxLifetime,
+		StatementTimeout: cfg.DBStatementTimeout,
+	})
 	if err != nil {
 		log.Fatal("database_open_failed", zap.Error(err))
 	}
@@ -78,9 +83,9 @@ func main() {
 	defer ticker.Stop()
 
 	run := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.DBJobTimeout)
 		defer cancel()
-		ok, err := rdb.SetNX(ctx, "worker:tick", "1", 50*time.Second).Result()
+		ok, err := rdb.SetNX(ctx, "worker:tick", "1", cfg.DBJobTimeout).Result()
 		if err != nil {
 			log.Error("worker_tick_lock_failed", zap.Error(err))
 			return

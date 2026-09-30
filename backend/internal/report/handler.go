@@ -122,7 +122,7 @@ func (h *Handler) Monthly(w http.ResponseWriter, r *http.Request) {
 	if h.maybePDF(w, r, database.ReportMonthly, f, nil) {
 		return
 	}
-	items, err := h.Service.listIncidents(actor, f)
+	items, err := h.Service.listIncidents(r.Context(), actor, f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -162,7 +162,7 @@ func (h *Handler) LTIFR(w http.ResponseWriter, r *http.Request) {
 	if h.maybePDF(w, r, database.ReportLTIFR, f, nil) {
 		return
 	}
-	out, err := h.Service.LTIFR(actor, f)
+	out, err := h.Service.LTIFR(r.Context(), actor, f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -198,7 +198,7 @@ func (h *Handler) CorrectiveActions(w http.ResponseWriter, r *http.Request) {
 	if h.maybePDF(w, r, database.ReportCAStatus, f, nil) {
 		return
 	}
-	items, err := h.Service.listCAs(actor, f)
+	items, err := h.Service.listCAs(r.Context(), actor, f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -268,7 +268,7 @@ func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid id")
 		return
 	}
-	row, url, err := h.Service.GetJob(id, actor)
+	row, url, err := h.Service.GetJob(r.Context(), id, actor)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -297,7 +297,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.Service.ListArchive(actor)
+	rows, err := h.Service.ListArchive(r.Context(), actor)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -348,7 +348,7 @@ func (h *Handler) PutWorkHours(w http.ResponseWriter, r *http.Request) {
 		}
 		locID = &id
 	}
-	row, err := h.Service.UpsertWorkHours(locID, start, end, body.Hours)
+	row, err := h.Service.UpsertWorkHours(r.Context(), locID, start, end, body.Hours)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -376,7 +376,7 @@ func (h *Handler) ListWorkHours(w http.ResponseWriter, r *http.Request) {
 		}
 		locID = &id
 	}
-	rows, err := h.Service.ListWorkHours(locID)
+	rows, err := h.Service.ListWorkHours(r.Context(), locID)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return

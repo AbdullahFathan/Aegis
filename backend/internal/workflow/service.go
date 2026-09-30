@@ -50,7 +50,7 @@ func (s *Service) Reject(ctx context.Context, id uuid.UUID, actor authctx.Princi
 }
 
 func (s *Service) Close(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip, comment string) (database.Incident, error) {
-	inc, loc, err := s.load(id)
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -67,7 +67,7 @@ func (s *Service) Close(ctx context.Context, id uuid.UUID, actor authctx.Princip
 		return database.Incident{}, incident.WrapIllegal("illegal status transition")
 	}
 	var pending int64
-	if err := s.DB.Model(&database.CorrectiveAction{}).
+	if err := database.With(ctx, s.DB).Model(&database.CorrectiveAction{}).
 		Where("incident_id = ? AND status <> ?", inc.ID, database.CAStatusVerified).
 		Count(&pending).Error; err != nil {
 		return database.Incident{}, err
@@ -81,7 +81,9 @@ func (s *Service) Close(ctx context.Context, id uuid.UUID, actor authctx.Princip
 		row.ClosedByID = &actor.ID
 	})
 	if err == nil && s.Notify != nil {
-		s.Notify.OnClosed(ctx, row, loc)
+		actx, cancel := database.AfterCommit(ctx)
+		defer cancel()
+		s.Notify.OnClosed(actx, row, loc)
 	}
 	return row, err
 }
@@ -90,8 +92,8 @@ func (s *Service) StartCorrectiveAction(ctx context.Context, id uuid.UUID, actor
 	return s.transition(ctx, id, actor, ip, comment, database.StatusUnderInvestigation, database.StatusCorrectiveAction, database.AuditStatusChanged, s.canStartCA)
 }
 
-func (s *Service) Timeline(id uuid.UUID, actor authctx.Principal) ([]database.IncidentWorkflowLog, error) {
-	inc, loc, err := s.load(id)
+func (s *Service) Timeline(ctx context.Context, id uuid.UUID, actor authctx.Principal) ([]database.IncidentWorkflowLog, error) {
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +101,7 @@ func (s *Service) Timeline(id uuid.UUID, actor authctx.Principal) ([]database.In
 		return nil, incident.ErrNotFound
 	}
 	var items []database.IncidentWorkflowLog
-	err = s.DB.Where("incident_id = ?", id).Order("created_at ASC").Find(&items).Error
+	err = database.With(ctx, s.DB).Where("incident_id = ?", id).Order("created_at ASC").Find(&items).Error
 	return items, err
 }
 
@@ -133,7 +135,7 @@ func (s *Service) canStartCA(actor authctx.Principal, loc database.Location) boo
 }
 
 func (s *Service) transition(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip, comment string, from, to database.IncidentStatus, action database.AuditAction, allow allowFn) (database.Incident, error) {
-	inc, loc, err := s.load(id)
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -150,16 +152,20 @@ func (s *Service) transition(ctx context.Context, id uuid.UUID, actor authctx.Pr
 	if err != nil {
 		return database.Incident{}, err
 	}
-	if s.Notify != nil {
-		switch to {
-		case database.StatusUnderInvestigation:
-			s.Notify.OnVerified(ctx, row, loc)
-		case database.StatusRejected:
-			s.Notify.OnRejected(ctx, row, loc)
+	if s.Notify != nil || (to == database.StatusUnderInvestigation && row.Category == database.CategoryFatality && s.Emergency != nil) {
+		actx, cancel := database.AfterCommit(ctx)
+		defer cancel()
+		if s.Notify != nil {
+			switch to {
+			case database.StatusUnderInvestigation:
+				s.Notify.OnVerified(actx, row, loc)
+			case database.StatusRejected:
+				s.Notify.OnRejected(actx, row, loc)
+			}
 		}
-	}
-	if to == database.StatusUnderInvestigation && row.Category == database.CategoryFatality && s.Emergency != nil {
-		_ = s.Emergency.NotifyFatality(ctx, row.ID, row.Title)
+		if to == database.StatusUnderInvestigation && row.Category == database.CategoryFatality && s.Emergency != nil {
+			_ = s.Emergency.NotifyFatality(actx, row.ID, row.Title)
+		}
 	}
 	return row, nil
 }
@@ -176,7 +182,7 @@ func (s *Service) apply(ctx context.Context, inc database.Incident, actor authct
 		c := strings.TrimSpace(comment)
 		commentPtr = &c
 	}
-	err := s.DB.Transaction(func(tx *gorm.DB) error {
+	err := database.With(ctx, s.DB).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&inc).Error; err != nil {
 			return err
 		}
@@ -192,7 +198,9 @@ func (s *Service) apply(ctx context.Context, inc database.Incident, actor authct
 	if err != nil {
 		return database.Incident{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Incident", EntityID: inc.ID.String(),
 		Action: action, Before: before, After: incident.Snapshot(inc),
@@ -200,9 +208,10 @@ func (s *Service) apply(ctx context.Context, inc database.Incident, actor authct
 	return inc, nil
 }
 
-func (s *Service) load(id uuid.UUID) (database.Incident, database.Location, error) {
+func (s *Service) load(ctx context.Context, id uuid.UUID) (database.Incident, database.Location, error) {
+	db := database.With(ctx, s.DB)
 	var inc database.Incident
-	err := s.DB.First(&inc, "id = ?", id).Error
+	err := db.First(&inc, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.Incident{}, database.Location{}, incident.ErrNotFound
 	}
@@ -210,7 +219,7 @@ func (s *Service) load(id uuid.UUID) (database.Incident, database.Location, erro
 		return database.Incident{}, database.Location{}, err
 	}
 	var loc database.Location
-	if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+	if err := db.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 		return database.Incident{}, database.Location{}, err
 	}
 	return inc, loc, nil

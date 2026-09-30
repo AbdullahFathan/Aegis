@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -17,7 +18,7 @@ func SeedSuperAdmin(repo *Repository, username, password string) (bool, error) {
 	if email == "" || password == "" {
 		return false, nil
 	}
-	if _, err := repo.FindByEmail(email); err == nil {
+	if _, err := repo.FindByEmail(context.Background(), email); err == nil {
 		return false, nil
 	} else if !errors.Is(err, ErrNotFound) {
 		return false, err
@@ -33,7 +34,7 @@ func SeedSuperAdmin(repo *Repository, username, password string) (bool, error) {
 		Role:         database.RoleSuperAdmin,
 		Status:       database.UserStatusActive,
 	}
-	if err := repo.Create(u); err != nil {
+	if err := repo.Create(context.Background(), u); err != nil {
 		if errors.Is(err, ErrEmailTaken) {
 			return false, nil
 		}

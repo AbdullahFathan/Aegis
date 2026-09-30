@@ -103,8 +103,8 @@ func (s *Service) window(f QueryFilter) (time.Time, time.Time) {
 	return from, now.UTC()
 }
 
-func (s *Service) incidentScope(actor authctx.Principal) *gorm.DB {
-	return incscope.ApplyListFilter(s.DB, actor).Where("status <> ?", database.StatusDraft)
+func (s *Service) incidentScope(ctx context.Context, actor authctx.Principal) *gorm.DB {
+	return incscope.ApplyListFilter(database.With(ctx, s.DB), actor).Where("status <> ?", database.StatusDraft)
 }
 
 func applyIncidentFilters(q *gorm.DB, f QueryFilter, from, to time.Time) *gorm.DB {
@@ -118,14 +118,14 @@ func applyIncidentFilters(q *gorm.DB, f QueryFilter, from, to time.Time) *gorm.D
 	return q
 }
 
-func (s *Service) UpsertWorkHours(locationID *uuid.UUID, start, end time.Time, hours float64) (database.WorkHours, error) {
+func (s *Service) UpsertWorkHours(ctx context.Context, locationID *uuid.UUID, start, end time.Time, hours float64) (database.WorkHours, error) {
 	if !end.After(start) {
 		return database.WorkHours{}, incident.WrapValidation("periodEnd must be after periodStart")
 	}
 	if hours <= 0 {
 		return database.WorkHours{}, incident.WrapValidation("hours must be greater than zero")
 	}
-	q := s.DB.Where("period_start = ? AND period_end = ?", start.UTC(), end.UTC())
+	q := database.With(ctx, s.DB).Where("period_start = ? AND period_end = ?", start.UTC(), end.UTC())
 	if locationID == nil {
 		q = q.Where("location_id IS NULL")
 	} else {
@@ -135,17 +135,17 @@ func (s *Service) UpsertWorkHours(locationID *uuid.UUID, start, end time.Time, h
 	err := q.First(&row).Error
 	if err == gorm.ErrRecordNotFound {
 		row = database.WorkHours{LocationID: locationID, PeriodStart: start.UTC(), PeriodEnd: end.UTC(), Hours: hours}
-		return row, s.DB.Create(&row).Error
+		return row, database.With(ctx, s.DB).Create(&row).Error
 	}
 	if err != nil {
 		return database.WorkHours{}, err
 	}
 	row.Hours = hours
-	return row, s.DB.Save(&row).Error
+	return row, database.With(ctx, s.DB).Save(&row).Error
 }
 
-func (s *Service) ListWorkHours(locationID *uuid.UUID) ([]database.WorkHours, error) {
-	q := s.DB.Model(&database.WorkHours{}).Order("period_start DESC")
+func (s *Service) ListWorkHours(ctx context.Context, locationID *uuid.UUID) ([]database.WorkHours, error) {
+	q := database.With(ctx, s.DB).Model(&database.WorkHours{}).Order("period_start DESC")
 	if locationID != nil {
 		q = q.Where("location_id = ?", *locationID)
 	}
@@ -164,18 +164,18 @@ type LTIFRResult struct {
 	TRIFR           float64   `json:"trifr"`
 }
 
-func (s *Service) LTIFR(actor authctx.Principal, f QueryFilter) (LTIFRResult, error) {
+func (s *Service) LTIFR(ctx context.Context, actor authctx.Principal, f QueryFilter) (LTIFRResult, error) {
 	from, to := s.window(f)
-	hours, err := ResolveHours(s.DB, from, to, f.LocationID)
+	hours, err := ResolveHours(database.With(ctx, s.DB), from, to, f.LocationID)
 	if err != nil {
 		return LTIFRResult{}, err
 	}
-	q := applyIncidentFilters(s.incidentScope(actor), f, from, to)
+	q := applyIncidentFilters(s.incidentScope(ctx, actor), f, from, to)
 	var lti, rec int64
 	if err := q.Where("category = ?", database.CategoryLTI).Count(&lti).Error; err != nil {
 		return LTIFRResult{}, err
 	}
-	q2 := applyIncidentFilters(s.incidentScope(actor), f, from, to)
+	q2 := applyIncidentFilters(s.incidentScope(ctx, actor), f, from, to)
 	if err := q2.Where("category IN ?", []database.IncidentCategory{
 		database.CategoryMedicalTreatment, database.CategoryLTI, database.CategoryFatality,
 	}).Count(&rec).Error; err != nil {
@@ -192,21 +192,21 @@ func (s *Service) LTIFR(actor authctx.Principal, f QueryFilter) (LTIFRResult, er
 	return LTIFRResult{From: from, To: to, LTICount: lti, RecordableCount: rec, Hours: hours, LTIFR: ltifr, TRIFR: trifr}, nil
 }
 
-func (s *Service) MonthlyRows(actor authctx.Principal, f QueryFilter) ([]database.Incident, error) {
-	return s.listIncidents(actor, f)
+func (s *Service) MonthlyRows(ctx context.Context, actor authctx.Principal, f QueryFilter) ([]database.Incident, error) {
+	return s.listIncidents(ctx, actor, f)
 }
 
-func (s *Service) listIncidents(actor authctx.Principal, f QueryFilter) ([]database.Incident, error) {
+func (s *Service) listIncidents(ctx context.Context, actor authctx.Principal, f QueryFilter) ([]database.Incident, error) {
 	from, to := s.window(f)
 	var items []database.Incident
-	err := applyIncidentFilters(s.incidentScope(actor), f, from, to).
+	err := applyIncidentFilters(s.incidentScope(ctx, actor), f, from, to).
 		Order("incident_datetime ASC").Find(&items).Error
 	return items, err
 }
 
-func (s *Service) listCAs(actor authctx.Principal, f QueryFilter) ([]database.CorrectiveAction, error) {
+func (s *Service) listCAs(ctx context.Context, actor authctx.Principal, f QueryFilter) ([]database.CorrectiveAction, error) {
 	from, to := s.window(f)
-	q := incscope.ApplyCAListFilter(s.DB, actor).
+	q := incscope.ApplyCAListFilter(database.With(ctx, s.DB), actor).
 		Where("incidents.status <> ?", database.StatusDraft).
 		Where("incidents.incident_datetime >= ? AND incidents.incident_datetime <= ?", from, to)
 	if f.LocationID != nil {
@@ -291,10 +291,10 @@ func (s *Service) EnqueuePDF(ctx context.Context, actor authctx.Principal, typ d
 		params["incidentId"] = incidentID.String()
 		var inc database.Incident
 		var loc database.Location
-		if err := s.DB.First(&inc, "id = ?", *incidentID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&inc, "id = ?", *incidentID).Error; err != nil {
 			return database.GeneratedReport{}, incident.ErrNotFound
 		}
-		if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 			return database.GeneratedReport{}, incident.ErrNotFound
 		}
 		if !incscope.CanSee(actor, inc, loc) {
@@ -308,7 +308,7 @@ func (s *Service) EnqueuePDF(ctx context.Context, actor authctx.Principal, typ d
 		Params:        params,
 		RequestedByID: actor.ID,
 	}
-	if err := s.DB.Create(&row).Error; err != nil {
+	if err := database.With(ctx, s.DB).Create(&row).Error; err != nil {
 		return database.GeneratedReport{}, err
 	}
 	if err := s.queue().Enqueue(ctx, row.ID); err != nil {
@@ -317,9 +317,9 @@ func (s *Service) EnqueuePDF(ctx context.Context, actor authctx.Principal, typ d
 	return row, nil
 }
 
-func (s *Service) GetJob(id uuid.UUID, actor authctx.Principal) (database.GeneratedReport, string, error) {
+func (s *Service) GetJob(ctx context.Context, id uuid.UUID, actor authctx.Principal) (database.GeneratedReport, string, error) {
 	var row database.GeneratedReport
-	if err := s.DB.First(&row, "id = ?", id).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&row, "id = ?", id).Error; err != nil {
 		return database.GeneratedReport{}, "", incident.ErrNotFound
 	}
 	if actor.Role == database.RoleHSEOfficer && row.RequestedByID != actor.ID {
@@ -336,8 +336,8 @@ func (s *Service) GetJob(id uuid.UUID, actor authctx.Principal) (database.Genera
 	return row, url, nil
 }
 
-func (s *Service) ListArchive(actor authctx.Principal) ([]database.GeneratedReport, error) {
-	q := s.DB.Model(&database.GeneratedReport{}).Order("created_at DESC")
+func (s *Service) ListArchive(ctx context.Context, actor authctx.Principal) ([]database.GeneratedReport, error) {
+	q := database.With(ctx, s.DB).Model(&database.GeneratedReport{}).Order("created_at DESC")
 	if actor.Role == database.RoleHSEOfficer {
 		q = q.Where("requested_by_id = ?", actor.ID)
 	}
@@ -353,7 +353,7 @@ func (s *Service) ProcessPending(ctx context.Context, n int) error {
 	}
 	if len(ids) == 0 {
 		var pending []database.GeneratedReport
-		if err := s.DB.Where("status = ?", database.ReportPending).Order("created_at ASC").Limit(n).Find(&pending).Error; err != nil {
+		if err := database.With(ctx, s.DB).Where("status = ?", database.ReportPending).Order("created_at ASC").Limit(n).Find(&pending).Error; err != nil {
 			return err
 		}
 		for _, p := range pending {
@@ -370,7 +370,7 @@ func (s *Service) ProcessPending(ctx context.Context, n int) error {
 
 func (s *Service) ProcessOne(ctx context.Context, id uuid.UUID) error {
 	var row database.GeneratedReport
-	if err := s.DB.First(&row, "id = ?", id).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&row, "id = ?", id).Error; err != nil {
 		return err
 	}
 	if row.Status != database.ReportPending {
@@ -379,7 +379,7 @@ func (s *Service) ProcessOne(ctx context.Context, id uuid.UUID) error {
 	body, err := s.render(ctx, row)
 	if err != nil {
 		msg := err.Error()
-		_ = s.DB.Model(&row).Updates(map[string]any{
+		_ = database.With(ctx, s.DB).Model(&row).Updates(map[string]any{
 			"status":        database.ReportFailed,
 			"error_message": msg,
 			"completed_at":  s.now(),
@@ -391,7 +391,7 @@ func (s *Service) ProcessOne(ctx context.Context, id uuid.UUID) error {
 	key := "reports/" + hex.EncodeToString(sum[:]) + ".pdf"
 	if err := s.store().Put(ctx, key, bytes.NewReader(body), int64(len(body)), "application/pdf"); err != nil {
 		msg := err.Error()
-		dbErr := s.DB.Model(&row).Updates(map[string]any{
+		dbErr := database.With(ctx, s.DB).Model(&row).Updates(map[string]any{
 			"status":        database.ReportFailed,
 			"error_message": msg,
 			"completed_at":  s.now(),
@@ -400,7 +400,7 @@ func (s *Service) ProcessOne(ctx context.Context, id uuid.UUID) error {
 		return dbErr
 	}
 	now := s.now()
-	if err := s.DB.Model(&row).Updates(map[string]any{
+	if err := database.With(ctx, s.DB).Model(&row).Updates(map[string]any{
 		"status":       database.ReportDone,
 		"stored_key":   key,
 		"completed_at": now,
@@ -416,7 +416,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 	f := paramsToFilter(row.Params)
 	actor := authctx.Principal{ID: row.RequestedByID, Role: database.RoleHSEManager}
 	var u database.User
-	if err := s.DB.First(&u, "id = ?", row.RequestedByID).Error; err == nil {
+	if err := database.With(ctx, s.DB).First(&u, "id = ?", row.RequestedByID).Error; err == nil {
 		actor.Role = u.Role
 	}
 	conf, _ := row.Params["confidential"].(bool)
@@ -433,7 +433,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 	}
 	switch row.Type {
 	case database.ReportMonthly:
-		items, err := s.listIncidents(actor, f)
+		items, err := s.listIncidents(ctx, actor, f)
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +449,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 			doc.Lines = []string{"(no incidents)"}
 		}
 	case database.ReportCAStatus:
-		items, err := s.listCAs(actor, f)
+		items, err := s.listCAs(ctx, actor, f)
 		if err != nil {
 			return nil, err
 		}
@@ -461,7 +461,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 			doc.Lines = []string{"(no corrective actions)"}
 		}
 	case database.ReportLTIFR:
-		r, err := s.LTIFR(actor, f)
+		r, err := s.LTIFR(ctx, actor, f)
 		if err != nil {
 			return nil, err
 		}
@@ -480,7 +480,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 			return nil, fmt.Errorf("missing incidentId")
 		}
 		var inc database.Incident
-		if err := s.DB.First(&inc, "id = ?", incID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&inc, "id = ?", incID).Error; err != nil {
 			return nil, err
 		}
 		doc.Title = "Incident Investigation Report"
@@ -494,7 +494,7 @@ func (s *Service) render(ctx context.Context, row database.GeneratedReport) ([]b
 			"Description: " + inc.Description,
 		}
 		var rca database.RootCauseAnalysis
-		if err := s.DB.Where("incident_id = ?", inc.ID).First(&rca).Error; err == nil {
+		if err := database.With(ctx, s.DB).Where("incident_id = ?", inc.ID).First(&rca).Error; err == nil {
 			doc.Lines = append(doc.Lines, "Timeline: "+rca.Timeline, "Human factor: "+rca.HumanFactor)
 		}
 	default:
@@ -546,7 +546,7 @@ func (s *Service) RunMonthlySchedule(ctx context.Context, now time.Time) error {
 	from := time.Date(prev.Year(), prev.Month(), 1, 0, 0, 0, 0, loc)
 	to := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
 	var managers []database.User
-	if err := s.DB.Where("role = ? AND status = ?", database.RoleHSEManager, database.UserStatusActive).Find(&managers).Error; err != nil {
+	if err := database.With(ctx, s.DB).Where("role = ? AND status = ?", database.RoleHSEManager, database.UserStatusActive).Find(&managers).Error; err != nil {
 		return err
 	}
 	if len(managers) == 0 {

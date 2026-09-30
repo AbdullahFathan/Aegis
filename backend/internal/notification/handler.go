@@ -36,8 +36,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized")
 		return
 	}
-	items, err := h.Service.List(actor)
+	items, err := h.Service.List(r.Context(), actor)
 	if err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}
@@ -78,7 +81,7 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid id")
 		return
 	}
-	if err := h.Service.MarkRead(id, actor); err != nil {
+	if err := h.Service.MarkRead(r.Context(), id, actor); err != nil {
 		incident.WriteErr(w, err)
 		return
 	}
@@ -107,7 +110,10 @@ func (h *Handler) PutPreference(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid request body")
 		return
 	}
-	if err := h.Service.SetEmailPreference(actor.ID, database.NotificationType(body.EventType), body.EmailEnabled); err != nil {
+	if err := h.Service.SetEmailPreference(r.Context(), actor.ID, database.NotificationType(body.EventType), body.EmailEnabled); err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}

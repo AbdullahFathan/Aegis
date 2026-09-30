@@ -62,7 +62,7 @@ func (h *Handler) Summary(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	out, err := h.Service.Summary(f)
+	out, err := h.Service.Summary(r.Context(), f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -86,7 +86,7 @@ func (h *Handler) Trends(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	out, err := h.Service.Trends(f)
+	out, err := h.Service.Trends(r.Context(), f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -110,7 +110,7 @@ func (h *Handler) Heatmap(w http.ResponseWriter, r *http.Request) {
 		incident.WriteErr(w, err)
 		return
 	}
-	out, err := h.Service.Heatmap(f)
+	out, err := h.Service.Heatmap(r.Context(), f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return

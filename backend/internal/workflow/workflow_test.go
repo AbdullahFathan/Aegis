@@ -127,7 +127,7 @@ func TestRejectRequiresCommentAndVerifyCloseTimeline(t *testing.T) {
 	_, err = wf.Verify(context.Background(), closed.ID, authctx.Principal{ID: sup.ID, Role: sup.Role}, "ip", "")
 	require.ErrorIs(t, err, incident.ErrIllegal)
 
-	logs, err := wf.Timeline(closed.ID, authctx.Principal{ID: mgr.ID, Role: mgr.Role})
+	logs, err := wf.Timeline(context.Background(), closed.ID, authctx.Principal{ID: mgr.ID, Role: mgr.Role})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(logs), 4)
 	require.Equal(t, database.StatusDraft, logs[0].FromStatus)

@@ -43,6 +43,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			_ = response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", ErrInvalidCredentials.Error())
 			return
 		}
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}
@@ -103,7 +106,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing access token")
 		return
 	}
-	view, err := h.Service.Me(p.ID)
+	view, err := h.Service.Me(r.Context(), p.ID)
 	if err != nil {
 		_ = response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid or expired access token")
 		return

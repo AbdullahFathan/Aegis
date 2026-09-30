@@ -2,6 +2,7 @@ package auditlog
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"net/http"
 	"strconv"
@@ -23,14 +24,14 @@ type ListFilter struct {
 	PageSize   int
 }
 
-func (r *Repository) List(f ListFilter) ([]database.AuditLog, int64, error) {
+func (r *Repository) List(ctx context.Context, f ListFilter) ([]database.AuditLog, int64, error) {
 	if f.Page < 1 {
 		f.Page = 1
 	}
 	if f.PageSize < 1 || f.PageSize > 200 {
 		f.PageSize = 50
 	}
-	q := r.DB.Model(&database.AuditLog{})
+	q := database.With(ctx, r.DB).Model(&database.AuditLog{})
 	if f.From != nil {
 		q = q.Where("created_at >= ?", f.From.UTC())
 	}
@@ -123,8 +124,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		f.To = &t
 	}
-	rows, total, err := h.Repo.List(f)
+	rows, total, err := h.Repo.List(r.Context(), f)
 	if err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}

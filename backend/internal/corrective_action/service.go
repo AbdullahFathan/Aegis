@@ -70,8 +70,8 @@ type ListFilter struct {
 	LocationID *uuid.UUID
 }
 
-func (s *Service) ListByIncident(incidentID uuid.UUID, actor authctx.Principal) ([]database.CorrectiveAction, error) {
-	inc, loc, err := s.loadIncident(incidentID)
+func (s *Service) ListByIncident(ctx context.Context, incidentID uuid.UUID, actor authctx.Principal) ([]database.CorrectiveAction, error) {
+	inc, loc, err := s.loadIncident(ctx, incidentID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s *Service) ListByIncident(incidentID uuid.UUID, actor authctx.Principal) 
 		return nil, incident.ErrNotFound
 	}
 	var items []database.CorrectiveAction
-	err = s.DB.Where("incident_id = ?", incidentID).Order("created_at ASC").Find(&items).Error
+	err = database.With(ctx, s.DB).Where("incident_id = ?", incidentID).Order("created_at ASC").Find(&items).Error
 	return items, err
 }
 
@@ -97,10 +97,10 @@ func (s *Service) Create(ctx context.Context, incidentID uuid.UUID, in CreateInp
 		return database.CorrectiveAction{}, incident.WrapValidation("invalid actionType or priority")
 	}
 	var assignee database.User
-	if err := s.DB.First(&assignee, "id = ?", in.AssigneeID).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&assignee, "id = ?", in.AssigneeID).Error; err != nil {
 		return database.CorrectiveAction{}, incident.WrapValidation("assignee not found")
 	}
-	inc, loc, err := s.loadIncident(incidentID)
+	inc, loc, err := s.loadIncident(ctx, incidentID)
 	if err != nil {
 		return database.CorrectiveAction{}, err
 	}
@@ -122,22 +122,24 @@ func (s *Service) Create(ctx context.Context, incidentID uuid.UUID, in CreateInp
 		AssigneeID:  in.AssigneeID,
 		DueDate:     in.DueDate.UTC(),
 	}
-	if err := s.DB.Create(&row).Error; err != nil {
+	if err := database.With(ctx, s.DB).Create(&row).Error; err != nil {
 		return database.CorrectiveAction{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "CorrectiveAction", EntityID: row.ID.String(),
 		Action: database.AuditCreated, After: map[string]any{"incidentId": incidentID.String(), "assigneeId": in.AssigneeID.String()},
 	})
 	if s.Notify != nil {
-		s.Notify.OnCAAssigned(ctx, row, inc, loc)
+		s.Notify.OnCAAssigned(actx, row, inc, loc)
 	}
 	return row, nil
 }
 
 func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor authctx.Principal, ip string) (database.CorrectiveAction, error) {
-	row, inc, loc, err := s.loadCA(id)
+	row, inc, loc, err := s.loadCA(ctx, id)
 	if err != nil {
 		return database.CorrectiveAction{}, err
 	}
@@ -181,10 +183,12 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 			return database.CorrectiveAction{}, err
 		}
 	}
-	if err := s.DB.Save(&row).Error; err != nil {
+	if err := database.With(ctx, s.DB).Save(&row).Error; err != nil {
 		return database.CorrectiveAction{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "CorrectiveAction", EntityID: row.ID.String(),
 		Action: database.AuditUpdated, Before: before, After: snapshotCA(row),
@@ -218,7 +222,7 @@ func (s *Service) applyStatus(row *database.CorrectiveAction, to database.CAStat
 }
 
 func (s *Service) Verify(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip string) (database.CorrectiveAction, error) {
-	row, inc, loc, err := s.loadCA(id)
+	row, inc, loc, err := s.loadCA(ctx, id)
 	if err != nil {
 		return database.CorrectiveAction{}, err
 	}
@@ -237,10 +241,12 @@ func (s *Service) Verify(ctx context.Context, id uuid.UUID, actor authctx.Princi
 	row.Status = database.CAStatusVerified
 	row.VerifiedByID = &actor.ID
 	row.VerifiedAt = &now
-	if err := s.DB.Save(&row).Error; err != nil {
+	if err := database.With(ctx, s.DB).Save(&row).Error; err != nil {
 		return database.CorrectiveAction{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "CorrectiveAction", EntityID: row.ID.String(),
 		Action: database.AuditUpdated, After: snapshotCA(row),
@@ -248,8 +254,8 @@ func (s *Service) Verify(ctx context.Context, id uuid.UUID, actor authctx.Princi
 	return row, nil
 }
 
-func (s *Service) Tracker(actor authctx.Principal, f ListFilter) ([]database.CorrectiveAction, error) {
-	q := incscope.ApplyCAListFilter(s.DB.Session(&gorm.Session{}), actor)
+func (s *Service) Tracker(ctx context.Context, actor authctx.Principal, f ListFilter) ([]database.CorrectiveAction, error) {
+	q := incscope.ApplyCAListFilter(database.With(ctx, s.DB).Session(&gorm.Session{}), actor)
 	if f.Status != "" {
 		q = q.Where("corrective_actions.status = ?", f.Status)
 	}
@@ -290,18 +296,18 @@ func MarkOverdue(db *gorm.DB, now time.Time) ([]database.CorrectiveAction, error
 }
 
 func (s *Service) RunOverdueJob(ctx context.Context, now time.Time) error {
-	rows, err := MarkOverdue(s.DB, now)
+	rows, err := MarkOverdue(database.With(ctx, s.DB), now)
 	if err != nil {
 		return err
 	}
 	day := now.UTC().Format("2006-01-02")
 	for _, ca := range rows {
 		var inc database.Incident
-		if err := s.DB.First(&inc, "id = ?", ca.IncidentID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&inc, "id = ?", ca.IncidentID).Error; err != nil {
 			continue
 		}
 		var loc database.Location
-		if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 			continue
 		}
 		if s.Once != nil && !s.Once.Claim(ctx, "ca-overdue:"+ca.ID.String()+":"+day, 24*time.Hour) {
@@ -318,7 +324,7 @@ func (s *Service) runDueSoon(ctx context.Context, now time.Time) error {
 	today := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
 	soon := today.Add(48 * time.Hour)
 	var rows []database.CorrectiveAction
-	err := s.DB.Where("status IN ? AND due_date >= ? AND due_date <= ?",
+	err := database.With(ctx, s.DB).Where("status IN ? AND due_date >= ? AND due_date <= ?",
 		[]database.CAStatus{database.CAStatusOpen, database.CAStatusInProgress, database.CAStatusOverdue},
 		today, soon).Find(&rows).Error
 	if err != nil {
@@ -327,11 +333,11 @@ func (s *Service) runDueSoon(ctx context.Context, now time.Time) error {
 	day := now.UTC().Format("2006-01-02")
 	for _, ca := range rows {
 		var inc database.Incident
-		if err := s.DB.First(&inc, "id = ?", ca.IncidentID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&inc, "id = ?", ca.IncidentID).Error; err != nil {
 			continue
 		}
 		var loc database.Location
-		if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+		if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 			continue
 		}
 		if s.Once != nil && !s.Once.Claim(ctx, "ca-due:"+ca.ID.String()+":"+day, 24*time.Hour) {
@@ -358,9 +364,9 @@ func (s *Service) canPatchStatus(actor authctx.Principal, row database.Correctiv
 	return actor.ID == row.AssigneeID
 }
 
-func (s *Service) loadIncident(id uuid.UUID) (database.Incident, database.Location, error) {
+func (s *Service) loadIncident(ctx context.Context, id uuid.UUID) (database.Incident, database.Location, error) {
 	var inc database.Incident
-	err := s.DB.First(&inc, "id = ?", id).Error
+	err := database.With(ctx, s.DB).First(&inc, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.Incident{}, database.Location{}, incident.ErrNotFound
 	}
@@ -368,22 +374,22 @@ func (s *Service) loadIncident(id uuid.UUID) (database.Incident, database.Locati
 		return database.Incident{}, database.Location{}, err
 	}
 	var loc database.Location
-	if err := s.DB.First(&loc, "id = ?", inc.LocationID).Error; err != nil {
+	if err := database.With(ctx, s.DB).First(&loc, "id = ?", inc.LocationID).Error; err != nil {
 		return database.Incident{}, database.Location{}, err
 	}
 	return inc, loc, nil
 }
 
-func (s *Service) loadCA(id uuid.UUID) (database.CorrectiveAction, database.Incident, database.Location, error) {
+func (s *Service) loadCA(ctx context.Context, id uuid.UUID) (database.CorrectiveAction, database.Incident, database.Location, error) {
 	var row database.CorrectiveAction
-	err := s.DB.First(&row, "id = ?", id).Error
+	err := database.With(ctx, s.DB).First(&row, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.CorrectiveAction{}, database.Incident{}, database.Location{}, incident.ErrNotFound
 	}
 	if err != nil {
 		return database.CorrectiveAction{}, database.Incident{}, database.Location{}, err
 	}
-	inc, loc, err := s.loadIncident(row.IncidentID)
+	inc, loc, err := s.loadIncident(ctx, row.IncidentID)
 	return row, inc, loc, err
 }
 

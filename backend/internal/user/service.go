@@ -68,10 +68,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 		Role:         in.Role,
 		Status:       in.Status,
 	}
-	if err := s.Users.Create(&u); err != nil {
+	if err := s.Users.Create(ctx, &u); err != nil {
 		return database.User{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID:     actor.ID,
 		UserRole:   string(actor.Role),
 		IPAddress:  ip,
@@ -84,7 +86,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 }
 
 func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor authctx.Principal, ip string) (database.User, error) {
-	u, err := s.Users.FindByID(id)
+	u, err := s.Users.FindByID(ctx, id)
 	if err != nil {
 		return database.User{}, err
 	}
@@ -108,10 +110,12 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 		}
 		u.Status = *in.Status
 	}
-	if err := s.Users.Update(&u); err != nil {
+	if err := s.Users.Update(ctx, &u); err != nil {
 		return database.User{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID:     actor.ID,
 		UserRole:   string(actor.Role),
 		IPAddress:  ip,
@@ -124,16 +128,16 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 	return u, nil
 }
 
-func (s *Service) Get(id uuid.UUID) (database.User, error) {
-	return s.Users.FindByID(id)
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (database.User, error) {
+	return s.Users.FindByID(ctx, id)
 }
 
-func (s *Service) List(page, pageSize int, role, status string) ([]database.User, int64, error) {
+func (s *Service) List(ctx context.Context, page, pageSize int, role, status string) ([]database.User, int64, error) {
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	return s.Users.List(page, pageSize, role, status)
+	return s.Users.List(ctx, page, pageSize, role, status)
 }

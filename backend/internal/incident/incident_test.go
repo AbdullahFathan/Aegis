@@ -126,7 +126,7 @@ func TestCreateValidationAndPatchRules(t *testing.T) {
 	_, err = s.Patch(context.Background(), draft.ID, incident.PatchInput{Status: &st}, actor, "1.1.1.1")
 	require.ErrorIs(t, err, incident.ErrValidation)
 
-	_, err = s.Get(draft.ID, authctx.Principal{ID: other.ID, Role: other.Role})
+	_, err = s.Get(context.Background(), draft.ID, authctx.Principal{ID: other.ID, Role: other.Role})
 	require.ErrorIs(t, err, incident.ErrNotFound)
 }
 
@@ -183,7 +183,7 @@ func TestListRBACHidesForeignDrafts(t *testing.T) {
 	_, err = s.Submit(context.Background(), otherSite.ID, authctx.Principal{ID: other.ID, Role: other.Role}, "ip")
 	require.NoError(t, err)
 
-	items, _, err := s.List(authctx.Principal{ID: rep.ID, Role: rep.Role}, incident.ListFilter{Page: 1, PageSize: 50})
+	items, _, err := s.List(context.Background(), authctx.Principal{ID: rep.ID, Role: rep.Role}, incident.ListFilter{Page: 1, PageSize: 50})
 	require.NoError(t, err)
 	ids := map[uuid.UUID]bool{}
 	for _, it := range items {
@@ -192,7 +192,7 @@ func TestListRBACHidesForeignDrafts(t *testing.T) {
 	require.True(t, ids[mine.ID])
 	require.False(t, ids[theirs.ID])
 
-	items, _, err = s.List(authctx.Principal{ID: sup.ID, Role: sup.Role}, incident.ListFilter{Page: 1, PageSize: 50})
+	items, _, err = s.List(context.Background(), authctx.Principal{ID: sup.ID, Role: sup.Role}, incident.ListFilter{Page: 1, PageSize: 50})
 	require.NoError(t, err)
 	ids = map[uuid.UUID]bool{}
 	for _, it := range items {

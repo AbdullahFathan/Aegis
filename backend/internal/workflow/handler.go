@@ -170,7 +170,7 @@ func (h *Handler) Timeline(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.Service.Timeline(id, actor)
+	items, err := h.Service.Timeline(r.Context(), id, actor)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return

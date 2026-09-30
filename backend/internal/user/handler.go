@@ -60,8 +60,11 @@ func view(u database.User) auth.UserView {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
-	items, total, err := h.Service.List(page, pageSize, r.URL.Query().Get("role"), r.URL.Query().Get("status"))
+	items, total, err := h.Service.List(r.Context(), page, pageSize, r.URL.Query().Get("role"), r.URL.Query().Get("status"))
 	if err != nil {
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 		return
 	}
@@ -169,6 +172,9 @@ func writeUserErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		_ = response.Error(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 	default:
+		if response.WriteTimeout(w, err) {
+			return
+		}
 		_ = response.Error(w, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 }

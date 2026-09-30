@@ -150,7 +150,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		_ = response.Error(w, http.StatusUnprocessableEntity, "VALIDATION", "invalid fileId")
 		return
 	}
-	if err := h.Service.Delete(id, fileID, actor); err != nil {
+	if err := h.Service.Delete(r.Context(), id, fileID, actor); err != nil {
 		incident.WriteErr(w, err)
 		return
 	}

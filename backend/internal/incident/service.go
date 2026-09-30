@@ -88,7 +88,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 	if err != nil {
 		return database.Incident{}, WrapValidation(err.Error())
 	}
-	loc, err := s.Repo.FindLocation(in.LocationID)
+	loc, err := s.Repo.FindLocation(ctx, in.LocationID)
 	if err != nil {
 		return database.Incident{}, WrapValidation("location not found")
 	}
@@ -96,7 +96,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 		return database.Incident{}, WrapValidation("location is inactive")
 	}
 	if in.AreaID != nil {
-		area, err := s.Repo.FindArea(*in.AreaID)
+		area, err := s.Repo.FindArea(ctx, *in.AreaID)
 		if err != nil || area.LocationID != in.LocationID {
 			return database.Incident{}, WrapValidation("area does not belong to location")
 		}
@@ -119,10 +119,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 		InitialTreatment:  trimPtr(in.InitialTreatment),
 		Witnesses:         in.Witnesses,
 	}
-	if err := s.Repo.Create(&row); err != nil {
+	if err := s.Repo.Create(ctx, &row); err != nil {
 		return database.Incident{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Incident", EntityID: row.ID.String(),
 		Action: database.AuditCreated, After: Snapshot(row),
@@ -130,8 +132,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput, actor authctx.Prin
 	return row, nil
 }
 
-func (s *Service) Get(id uuid.UUID, actor authctx.Principal) (database.Incident, error) {
-	inc, loc, err := s.load(id)
+func (s *Service) Get(ctx context.Context, id uuid.UUID, actor authctx.Principal) (database.Incident, error) {
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -141,14 +143,14 @@ func (s *Service) Get(id uuid.UUID, actor authctx.Principal) (database.Incident,
 	return inc, nil
 }
 
-func (s *Service) List(actor authctx.Principal, f ListFilter) ([]database.Incident, int64, error) {
+func (s *Service) List(ctx context.Context, actor authctx.Principal, f ListFilter) ([]database.Incident, int64, error) {
 	if f.Page < 1 {
 		f.Page = 1
 	}
 	if f.PageSize < 1 || f.PageSize > 100 {
 		f.PageSize = 20
 	}
-	q := incscope.ApplyListFilter(s.Repo.DB, actor)
+	q := incscope.ApplyListFilter(database.With(ctx, s.Repo.DB), actor)
 	if f.Status != "" {
 		q = q.Where("status = ?", f.Status)
 	}
@@ -177,7 +179,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 	if in.Status != nil {
 		return database.Incident{}, WrapValidation("status cannot be set directly")
 	}
-	inc, loc, err := s.load(id)
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -219,7 +221,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 		inc.IncidentDatetime = in.IncidentDatetime.UTC()
 	}
 	if in.LocationID != nil {
-		loc2, err := s.Repo.FindLocation(*in.LocationID)
+		loc2, err := s.Repo.FindLocation(ctx, *in.LocationID)
 		if err != nil || !loc2.IsActive {
 			return database.Incident{}, WrapValidation("location not found")
 		}
@@ -251,7 +253,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 		return database.Incident{}, err
 	}
 	if inc.AreaID != nil {
-		area, err := s.Repo.FindArea(*inc.AreaID)
+		area, err := s.Repo.FindArea(ctx, *inc.AreaID)
 		if err != nil || area.LocationID != inc.LocationID {
 			return database.Incident{}, WrapValidation("area does not belong to location")
 		}
@@ -261,14 +263,16 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 		return database.Incident{}, WrapValidation(err.Error())
 	}
 	inc.EscalationLevel = lvl
-	if err := s.Repo.Save(&inc); err != nil {
+	if err := s.Repo.Save(ctx, &inc); err != nil {
 		return database.Incident{}, err
 	}
 	after := Snapshot(inc)
 	if in.Reason != nil {
 		after["reason"] = strings.TrimSpace(*in.Reason)
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Incident", EntityID: inc.ID.String(),
 		Action: database.AuditUpdated, Before: before, After: after,
@@ -277,7 +281,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, in PatchInput, actor 
 }
 
 func (s *Service) Submit(ctx context.Context, id uuid.UUID, actor authctx.Principal, ip string) (database.Incident, error) {
-	inc, loc, err := s.load(id)
+	inc, loc, err := s.load(ctx, id)
 	if err != nil {
 		return database.Incident{}, err
 	}
@@ -294,7 +298,7 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID, actor authctx.Princi
 	before := Snapshot(inc)
 	now := s.now()
 	from := inc.Status
-	err = s.Repo.DB.Transaction(func(tx *gorm.DB) error {
+	err = database.With(ctx, s.Repo.DB).Transaction(func(tx *gorm.DB) error {
 		if inc.IncidentNumber == nil {
 			num, err := NextIncidentNumber(tx, now)
 			if err != nil {
@@ -318,26 +322,28 @@ func (s *Service) Submit(ctx context.Context, id uuid.UUID, actor authctx.Princi
 	if err != nil {
 		return database.Incident{}, err
 	}
-	_ = s.Audit.Insert(ctx, auditlog.Entry{
+	actx, cancel := database.AfterCommit(ctx)
+	defer cancel()
+	_ = s.Audit.Insert(actx, auditlog.Entry{
 		UserID: actor.ID, UserRole: string(actor.Role), IPAddress: ip,
 		EntityType: "Incident", EntityID: inc.ID.String(),
 		Action: database.AuditStatusChanged, Before: before, After: Snapshot(inc),
 	})
 	if s.Notify != nil {
-		s.Notify.OnIncidentSubmitted(ctx, inc, loc)
+		s.Notify.OnIncidentSubmitted(actx, inc, loc)
 	}
 	if inc.Category == database.CategoryFatality && s.Emergency != nil {
-		_ = s.Emergency.NotifyFatality(ctx, inc.ID, inc.Title)
+		_ = s.Emergency.NotifyFatality(actx, inc.ID, inc.Title)
 	}
 	return inc, nil
 }
 
-func (s *Service) load(id uuid.UUID) (database.Incident, database.Location, error) {
-	inc, err := s.Repo.Find(id)
+func (s *Service) load(ctx context.Context, id uuid.UUID) (database.Incident, database.Location, error) {
+	inc, err := s.Repo.Find(ctx, id)
 	if err != nil {
 		return database.Incident{}, database.Location{}, err
 	}
-	loc, err := s.Repo.FindLocation(inc.LocationID)
+	loc, err := s.Repo.FindLocation(ctx, inc.LocationID)
 	if err != nil {
 		return database.Incident{}, database.Location{}, err
 	}

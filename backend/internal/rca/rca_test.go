@@ -94,9 +94,9 @@ func TestTemplatePerCategory(t *testing.T) {
 	_, err = svc.PutTemplate(context.Background(), database.CategoryLTI, database.RCATemplatePayload{Timeline: "lti"}, actor, "ip")
 	require.NoError(t, err)
 
-	nm, err := svc.GetTemplate(database.CategoryNearMiss)
+	nm, err := svc.GetTemplate(context.Background(), database.CategoryNearMiss)
 	require.NoError(t, err)
-	lti, err := svc.GetTemplate(database.CategoryLTI)
+	lti, err := svc.GetTemplate(context.Background(), database.CategoryLTI)
 	require.NoError(t, err)
 	require.Equal(t, "nm", nm.Payload.Timeline)
 	require.Equal(t, "lti", lti.Payload.Timeline)

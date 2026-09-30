@@ -48,7 +48,7 @@ func TestSecurityDeleteAfterSubmitRejected(t *testing.T) {
 	incSvc := &incident.Service{Repo: &incident.Repository{DB: db}, Audit: auditlog.Noop{}}
 	_, err = incSvc.Submit(context.Background(), row.ID, actor, "ip")
 	require.NoError(t, err)
-	err = fs.Delete(row.ID, created[0].ID, actor)
+	err = fs.Delete(context.Background(), row.ID, created[0].ID, actor)
 	require.ErrorIs(t, err, incident.ErrIllegal)
 	var still database.IncidentFile
 	require.NoError(t, db.First(&still, "id = ?", created[0].ID).Error)

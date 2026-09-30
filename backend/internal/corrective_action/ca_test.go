@@ -185,13 +185,13 @@ func TestTrackerHidesOtherSite(t *testing.T) {
 	}, authctx.Principal{ID: off2.ID, Role: off2.Role}, "ip")
 	require.NoError(t, err)
 
-	items, err := svc.Tracker(authctx.Principal{ID: off.ID, Role: off.Role}, correctiveaction.ListFilter{})
+	items, err := svc.Tracker(context.Background(), authctx.Principal{ID: off.ID, Role: off.Role}, correctiveaction.ListFilter{})
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, "A", items[0].Description)
 
 	overdue := database.CAStatusOverdue
-	filtered, err := svc.Tracker(authctx.Principal{ID: off.ID, Role: off.Role}, correctiveaction.ListFilter{Status: string(overdue)})
+	filtered, err := svc.Tracker(context.Background(), authctx.Principal{ID: off.ID, Role: off.Role}, correctiveaction.ListFilter{Status: string(overdue)})
 	require.NoError(t, err)
 	require.Len(t, filtered, 0)
 }

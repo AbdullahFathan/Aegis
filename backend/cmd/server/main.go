@@ -59,7 +59,7 @@ func main() {
 
 	var db *gorm.DB
 	if cfg.DatabaseDSN != "" {
-		db, err = database.OpenPostgres(cfg.DatabaseDSN)
+		db, err = database.OpenPostgres(cfg.DatabaseDSN, dbPool(cfg))
 		if err != nil {
 			log.Fatal("database_open_failed", zap.Error(err))
 		}
@@ -103,7 +103,10 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		payload := map[string]string{"status": "ok", "db": "skipped"}
 		if db != nil {
-			if err := database.Ping(db); err != nil {
+			pingCtx, pingCancel := context.WithTimeout(r.Context(), cfg.DBPingTimeout)
+			err := database.Ping(pingCtx, db)
+			pingCancel()
+			if err != nil {
 				payload["status"] = "degraded"
 				payload["db"] = "down"
 				_ = response.Success(w, http.StatusServiceUnavailable, payload)
@@ -167,71 +170,84 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 	repH := &report.Handler{Service: repSvc}
 	auditH := &auditlog.Handler{Repo: audit}
 
-	r.With(middleware.LoginRateLimit(limiter)).Post("/auth/login", authH.Login)
-	r.Post("/auth/refresh", authH.Refresh)
-	r.Post("/auth/logout", authH.Logout)
+	api := middleware.Timeout(cfg.DBAPITimeout)
+	reportTimeout := middleware.Timeout(cfg.DBReportTimeout)
+	uploadTimeout := middleware.Timeout(cfg.DBUploadTimeout)
+
+	r.With(middleware.LoginRateLimit(limiter), api).Post("/auth/login", authH.Login)
+	r.With(api).Post("/auth/refresh", authH.Refresh)
+	r.With(api).Post("/auth/logout", authH.Logout)
 
 	r.Group(func(ar chi.Router) {
 		ar.Use(middleware.RequireAuth(tokens))
-		ar.Get("/auth/me", authH.Me)
+		ar.With(api).Get("/auth/me", authH.Me)
 
-		ar.With(middleware.RequirePermission(rbac.UsersRead)).Get("/users", userH.List)
-		ar.With(middleware.RequirePermission(rbac.UsersWrite)).Post("/users", userH.Create)
-		ar.With(middleware.RequirePermission(rbac.UsersWrite)).Patch("/users/{id}", userH.Patch)
+		ar.With(middleware.RequirePermission(rbac.UsersRead), api).Get("/users", userH.List)
+		ar.With(middleware.RequirePermission(rbac.UsersWrite), api).Post("/users", userH.Create)
+		ar.With(middleware.RequirePermission(rbac.UsersWrite), api).Patch("/users/{id}", userH.Patch)
 
-		ar.With(middleware.RequirePermission(rbac.LocationsRead)).Get("/regions", locH.ListRegions)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Post("/regions", locH.CreateRegion)
-		ar.With(middleware.RequirePermission(rbac.LocationsRead)).Get("/locations", locH.ListLocations)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Post("/locations", locH.CreateLocation)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Patch("/locations/{id}", locH.PatchLocation)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Delete("/locations/{id}", locH.DeleteLocation)
-		ar.With(middleware.RequirePermission(rbac.LocationsRead)).Get("/locations/{id}/areas", locH.ListAreas)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Post("/locations/{id}/areas", locH.CreateArea)
+		ar.With(middleware.RequirePermission(rbac.LocationsRead), api).Get("/regions", locH.ListRegions)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), api).Post("/regions", locH.CreateRegion)
+		ar.With(middleware.RequirePermission(rbac.LocationsRead), api).Get("/locations", locH.ListLocations)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), api).Post("/locations", locH.CreateLocation)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), api).Patch("/locations/{id}", locH.PatchLocation)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), api).Delete("/locations/{id}", locH.DeleteLocation)
+		ar.With(middleware.RequirePermission(rbac.LocationsRead), api).Get("/locations/{id}/areas", locH.ListAreas)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), api).Post("/locations/{id}/areas", locH.CreateArea)
 
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents", incH.List)
-		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents", incH.Create)
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}", incH.Get)
-		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Patch("/incidents/{id}", incH.Patch)
-		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents/{id}/submit", incH.Submit)
-		ar.With(middleware.RequirePermission(rbac.IncidentsVerify)).Post("/incidents/{id}/verify", wfH.Verify)
-		ar.With(middleware.RequirePermission(rbac.IncidentsReject)).Post("/incidents/{id}/reject", wfH.Reject)
-		ar.With(middleware.RequirePermission(rbac.IncidentsClose)).Post("/incidents/{id}/close", wfH.Close)
-		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Post("/incidents/{id}/start-corrective-action", wfH.StartCorrectiveAction)
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/timeline", wfH.Timeline)
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/files", fileH.List)
-		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Post("/incidents/{id}/files", fileH.Upload)
-		ar.With(middleware.RequirePermission(rbac.FilesWrite)).Delete("/incidents/{id}/files/{fileId}", fileH.Delete)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents", incH.List)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite), api).Post("/incidents", incH.Create)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents/{id}", incH.Get)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite), api).Patch("/incidents/{id}", incH.Patch)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite), api).Post("/incidents/{id}/submit", incH.Submit)
+		ar.With(middleware.RequirePermission(rbac.IncidentsVerify), api).Post("/incidents/{id}/verify", wfH.Verify)
+		ar.With(middleware.RequirePermission(rbac.IncidentsReject), api).Post("/incidents/{id}/reject", wfH.Reject)
+		ar.With(middleware.RequirePermission(rbac.IncidentsClose), api).Post("/incidents/{id}/close", wfH.Close)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite), api).Post("/incidents/{id}/start-corrective-action", wfH.StartCorrectiveAction)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents/{id}/timeline", wfH.Timeline)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents/{id}/files", fileH.List)
+		ar.With(middleware.RequirePermission(rbac.FilesWrite), uploadTimeout).Post("/incidents/{id}/files", fileH.Upload)
+		ar.With(middleware.RequirePermission(rbac.FilesWrite), api).Delete("/incidents/{id}/files/{fileId}", fileH.Delete)
 
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/rca", rcaH.Get)
-		ar.With(middleware.RequirePermission(rbac.RCAWrite)).Put("/incidents/{id}/rca", rcaH.Upsert)
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/rca-templates/{category}", rcaH.GetTemplate)
-		ar.With(middleware.RequirePermission(rbac.RCAWrite)).Put("/rca-templates/{category}", rcaH.PutTemplate)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents/{id}/rca", rcaH.Get)
+		ar.With(middleware.RequirePermission(rbac.RCAWrite), api).Put("/incidents/{id}/rca", rcaH.Upsert)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/rca-templates/{category}", rcaH.GetTemplate)
+		ar.With(middleware.RequirePermission(rbac.RCAWrite), api).Put("/rca-templates/{category}", rcaH.PutTemplate)
 
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/incidents/{id}/corrective-actions", caH.ListByIncident)
-		ar.With(middleware.RequirePermission(rbac.CAWrite)).Post("/incidents/{id}/corrective-actions", caH.Create)
-		ar.With(middleware.RequirePermission(rbac.IncidentsRead)).Get("/corrective-actions", caH.Tracker)
-		ar.With(middleware.RequirePermission(rbac.IncidentsWrite)).Patch("/corrective-actions/{id}", caH.Patch)
-		ar.With(middleware.RequirePermission(rbac.CAVerify)).Post("/corrective-actions/{id}/verify", caH.Verify)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/incidents/{id}/corrective-actions", caH.ListByIncident)
+		ar.With(middleware.RequirePermission(rbac.CAWrite), api).Post("/incidents/{id}/corrective-actions", caH.Create)
+		ar.With(middleware.RequirePermission(rbac.IncidentsRead), api).Get("/corrective-actions", caH.Tracker)
+		ar.With(middleware.RequirePermission(rbac.IncidentsWrite), api).Patch("/corrective-actions/{id}", caH.Patch)
+		ar.With(middleware.RequirePermission(rbac.CAVerify), api).Post("/corrective-actions/{id}/verify", caH.Verify)
 
-		ar.Get("/notifications", notifH.List)
-		ar.Patch("/notifications/{id}/read", notifH.MarkRead)
-		ar.Put("/notifications/preferences", notifH.PutPreference)
+		ar.With(api).Get("/notifications", notifH.List)
+		ar.With(api).Patch("/notifications/{id}/read", notifH.MarkRead)
+		ar.With(api).Put("/notifications/preferences", notifH.PutPreference)
 
-		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/summary", dashH.Summary)
-		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/trends", dashH.Trends)
-		ar.With(middleware.RequirePermission(rbac.DashboardRead)).Get("/dashboard/heatmap", dashH.Heatmap)
+		ar.With(middleware.RequirePermission(rbac.DashboardRead), api).Get("/dashboard/summary", dashH.Summary)
+		ar.With(middleware.RequirePermission(rbac.DashboardRead), api).Get("/dashboard/trends", dashH.Trends)
+		ar.With(middleware.RequirePermission(rbac.DashboardRead), api).Get("/dashboard/heatmap", dashH.Heatmap)
 
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/monthly", repH.Monthly)
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/ltifr", repH.LTIFR)
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/corrective-actions", repH.CorrectiveActions)
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/investigation/{id}", repH.Investigation)
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports/jobs/{id}", repH.Job)
-		ar.With(middleware.RequirePermission(rbac.ReportsExport)).Get("/reports", repH.Archive)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Put("/work-hours", repH.PutWorkHours)
-		ar.With(middleware.RequirePermission(rbac.LocationsWrite)).Get("/work-hours", repH.ListWorkHours)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports/monthly", repH.Monthly)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports/ltifr", repH.LTIFR)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports/corrective-actions", repH.CorrectiveActions)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports/investigation/{id}", repH.Investigation)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports/jobs/{id}", repH.Job)
+		ar.With(middleware.RequirePermission(rbac.ReportsExport), reportTimeout).Get("/reports", repH.Archive)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), reportTimeout).Put("/work-hours", repH.PutWorkHours)
+		ar.With(middleware.RequirePermission(rbac.LocationsWrite), reportTimeout).Get("/work-hours", repH.ListWorkHours)
 
-		ar.With(middleware.RequirePermission(rbac.AuditLogsRead)).Get("/audit-logs", auditH.List)
+		ar.With(middleware.RequirePermission(rbac.AuditLogsRead), api).Get("/audit-logs", auditH.List)
 	})
 
 	return r
+}
+
+func dbPool(cfg config.Config) database.Pool {
+	return database.Pool{
+		MaxOpenConns:     cfg.DBMaxOpenConns,
+		MaxIdleConns:     cfg.DBMaxIdleConns,
+		ConnMaxLifetime:  cfg.DBConnMaxLifetime,
+		StatementTimeout: cfg.DBStatementTimeout,
+	}
 }

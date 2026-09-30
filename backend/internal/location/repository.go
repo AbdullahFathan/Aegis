@@ -1,6 +1,7 @@
 package location
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -31,76 +32,77 @@ func isUnique(err error) bool {
 	return strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate")
 }
 
-func (r *Repository) CreateRegion(row *database.Region) error {
-	err := r.DB.Create(row).Error
+func (r *Repository) CreateRegion(ctx context.Context, row *database.Region) error {
+	err := database.With(ctx, r.DB).Create(row).Error
 	if isUnique(err) {
 		return ErrConflict
 	}
 	return err
 }
 
-func (r *Repository) ListRegions() ([]database.Region, error) {
+func (r *Repository) ListRegions(ctx context.Context) ([]database.Region, error) {
 	var items []database.Region
-	err := r.DB.Order("name ASC").Find(&items).Error
+	err := database.With(ctx, r.DB).Order("name ASC").Find(&items).Error
 	return items, err
 }
 
-func (r *Repository) CreateLocation(row *database.Location) error {
-	err := r.DB.Create(row).Error
+func (r *Repository) CreateLocation(ctx context.Context, row *database.Location) error {
+	err := database.With(ctx, r.DB).Create(row).Error
 	if isUnique(err) {
 		return ErrConflict
 	}
 	return err
 }
 
-func (r *Repository) SaveLocation(row *database.Location) error {
-	err := r.DB.Save(row).Error
+func (r *Repository) SaveLocation(ctx context.Context, row *database.Location) error {
+	err := database.With(ctx, r.DB).Save(row).Error
 	if isUnique(err) {
 		return ErrConflict
 	}
 	return err
 }
 
-func (r *Repository) FindLocation(id uuid.UUID) (database.Location, error) {
+func (r *Repository) FindLocation(ctx context.Context, id uuid.UUID) (database.Location, error) {
 	var row database.Location
-	err := r.DB.Preload("Areas").First(&row, "id = ?", id).Error
+	err := database.With(ctx, r.DB).Preload("Areas").First(&row, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return database.Location{}, ErrNotFound
 	}
 	return row, err
 }
 
-func (r *Repository) ListLocations() ([]database.Location, error) {
+func (r *Repository) ListLocations(ctx context.Context) ([]database.Location, error) {
 	var items []database.Location
-	err := r.DB.Preload("Areas").Order("name ASC").Find(&items).Error
+	err := database.With(ctx, r.DB).Preload("Areas").Order("name ASC").Find(&items).Error
 	return items, err
 }
 
-func (r *Repository) UserExists(id uuid.UUID) (bool, error) {
+func (r *Repository) UserExists(ctx context.Context, id uuid.UUID) (bool, error) {
 	var n int64
-	err := r.DB.Model(&database.User{}).Where("id = ?", id).Count(&n).Error
+	err := database.With(ctx, r.DB).Model(&database.User{}).Where("id = ?", id).Count(&n).Error
 	return n > 0, err
 }
 
-func (r *Repository) RegionExists(id uuid.UUID) (bool, error) {
+func (r *Repository) RegionExists(ctx context.Context, id uuid.UUID) (bool, error) {
 	var n int64
-	err := r.DB.Model(&database.Region{}).Where("id = ?", id).Count(&n).Error
+	err := database.With(ctx, r.DB).Model(&database.Region{}).Where("id = ?", id).Count(&n).Error
 	return n > 0, err
 }
 
-func (r *Repository) CreateArea(row *database.Area) error {
+func (r *Repository) CreateArea(ctx context.Context, row *database.Area) error {
 	var n int64
-	if err := r.DB.Model(&database.Area{}).Where("location_id = ? AND code = ?", row.LocationID, row.Code).Count(&n).Error; err != nil {
+	db := database.With(ctx, r.DB)
+	if err := db.Model(&database.Area{}).Where("location_id = ? AND code = ?", row.LocationID, row.Code).Count(&n).Error; err != nil {
 		return err
 	}
 	if n > 0 {
 		return ErrConflict
 	}
-	return r.DB.Create(row).Error
+	return db.Create(row).Error
 }
 
-func (r *Repository) ListAreas(locationID uuid.UUID) ([]database.Area, error) {
+func (r *Repository) ListAreas(ctx context.Context, locationID uuid.UUID) ([]database.Area, error) {
 	var items []database.Area
-	err := r.DB.Where("location_id = ?", locationID).Order("name ASC").Find(&items).Error
+	err := database.With(ctx, r.DB).Where("location_id = ?", locationID).Order("name ASC").Find(&items).Error
 	return items, err
 }

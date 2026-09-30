@@ -54,7 +54,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	row, err := h.Service.Get(id, actor)
+	row, err := h.Service.Get(r.Context(), id, actor)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -109,7 +109,7 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 // @Router        /rca-templates/{category} [get]
 func (h *Handler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	cat := database.IncidentCategory(chi.URLParam(r, "category"))
-	row, err := h.Service.GetTemplate(cat)
+	row, err := h.Service.GetTemplate(r.Context(), cat)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return

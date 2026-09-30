@@ -53,7 +53,7 @@ func (h *Handler) ListByIncident(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.Service.ListByIncident(id, actor)
+	items, err := h.Service.ListByIncident(r.Context(), id, actor)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return
@@ -229,7 +229,7 @@ func (h *Handler) Tracker(w http.ResponseWriter, r *http.Request) {
 		}
 		f.LocationID = &id
 	}
-	items, err := h.Service.Tracker(actor, f)
+	items, err := h.Service.Tracker(r.Context(), actor, f)
 	if err != nil {
 		incident.WriteErr(w, err)
 		return

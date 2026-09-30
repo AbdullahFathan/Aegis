@@ -3,6 +3,8 @@ package response
 import (
 	"encoding/json"
 	"net/http"
+
+	"aegis/pkg/database"
 )
 
 type Envelope struct {
@@ -24,6 +26,14 @@ func JSON(w http.ResponseWriter, status int, payload Envelope) error {
 
 func Success(w http.ResponseWriter, status int, data any) error {
 	return JSON(w, status, Envelope{Success: true, Data: data})
+}
+
+func WriteTimeout(w http.ResponseWriter, err error) bool {
+	if !database.IsTimeout(err) {
+		return false
+	}
+	_ = Error(w, http.StatusGatewayTimeout, "TIMEOUT", "request timed out")
+	return true
 }
 
 func Error(w http.ResponseWriter, status int, code, message string) error {
