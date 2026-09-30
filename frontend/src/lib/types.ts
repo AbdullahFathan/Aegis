@@ -244,3 +244,98 @@ export type AppNotification = {
   referenceId: string;
   createdAt: string;
 };
+
+export type DashboardFilters = {
+  category?: IncidentCategory;
+  locationId?: string;
+  from?: string;
+  to?: string;
+};
+
+export type DashboardPipeline = {
+  PENDING_REVIEW: number;
+  UNDER_INVESTIGATION: number;
+  CORRECTIVE_ACTION: number;
+  CLOSED: number;
+};
+
+export type DashboardSummary = {
+  thisMonthCount: number;
+  lastMonthCount: number;
+  delta: number;
+  trend: "up" | "down" | "flat" | string;
+  caOverdueCount: number;
+  pipeline: DashboardPipeline;
+  ltifr?: number | null;
+  trifr?: number | null;
+  workHours?: number | null;
+};
+
+export type DashboardMonthBucket = {
+  year: number;
+  month: number;
+  count: number;
+};
+
+export type DashboardHeatCell = {
+  locationId: string;
+  locationCode: string;
+  category: IncidentCategory | string;
+  count: number;
+};
+
+export function dashboardQueryKey(filters: DashboardFilters) {
+  return ["dashboard", filters] as const;
+}
+
+export type ReportJob = {
+  jobId?: string;
+  id?: string;
+  status: string;
+  type?: string;
+  storedKey?: string | null;
+  downloadUrl?: string;
+  error?: string | null;
+};
+
+export type ArchiveReport = {
+  id: string;
+  type: string;
+  status: string;
+  storedKey: string | null;
+  createdAt: string;
+  errorMessage: string | null;
+  downloadUrl?: string;
+};
+
+export type AuditLog = {
+  id: string;
+  userId: string;
+  userRole: string;
+  ipAddress: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  createdAt: string;
+};
+
+export type AuditLogList = {
+  items: AuditLog[];
+  total: number;
+  page: number;
+  pageSize?: number;
+};
+
+export type AuditFilters = {
+  from?: string;
+  to?: string;
+  userId?: string;
+  entityType?: string;
+  action?: string;
+  page: number;
+  pageSize: number;
+};
+
+export function auditLogsQueryKey(filters: AuditFilters) {
+  return ["audit-logs", filters] as const;
+}

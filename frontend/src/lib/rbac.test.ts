@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canExportReports,
+  canReadAuditLogs,
+  canReadDashboardApi,
   canSeeNavItem,
   canUpdateCAStatus,
   canVerifyCA,
   canWriteCA,
   canWriteRca,
+  dashboardWidgetsFor,
   workflowActionsFor,
   type NavItem,
 } from "@/lib/rbac";
@@ -18,6 +22,7 @@ const items: NavItem[] = [
   "reports",
   "locations",
   "users",
+  "audit-logs",
 ];
 
 describe("canSeeNavItem", () => {
@@ -31,6 +36,7 @@ describe("canSeeNavItem", () => {
     expect(canSeeNavItem("REPORTER", "users")).toBe(false);
     expect(canSeeNavItem("REPORTER", "locations")).toBe(false);
     expect(canSeeNavItem("REPORTER", "reports")).toBe(false);
+    expect(canSeeNavItem("REPORTER", "audit-logs")).toBe(false);
   });
 
   it("shows reports to HSE roles and admins only", () => {
@@ -39,6 +45,27 @@ describe("canSeeNavItem", () => {
     expect(canSeeNavItem("SUPERVISOR", "reports")).toBe(false);
     expect(canSeeNavItem("ADMIN", "users")).toBe(true);
     expect(canSeeNavItem("SUPER_ADMIN", "locations")).toBe(true);
+    expect(canSeeNavItem("ADMIN", "audit-logs")).toBe(true);
+    expect(canSeeNavItem("HSE_MANAGER", "audit-logs")).toBe(false);
+  });
+
+  it("matches backend dashboard and report permissions", () => {
+    expect(canReadDashboardApi("HSE_MANAGER")).toBe(true);
+    expect(canReadDashboardApi("ADMIN")).toBe(true);
+    expect(canReadDashboardApi("HSE_OFFICER")).toBe(false);
+    expect(canReadDashboardApi("SUPERVISOR")).toBe(false);
+    expect(canExportReports("HSE_OFFICER")).toBe(true);
+    expect(canExportReports("SUPERVISOR")).toBe(false);
+    expect(canReadAuditLogs("SUPER_ADMIN")).toBe(true);
+    expect(canReadAuditLogs("HSE_OFFICER")).toBe(false);
+  });
+
+  it("composes dashboard widgets per role", () => {
+    expect(dashboardWidgetsFor("HSE_MANAGER")).toEqual(["kpi", "charts"]);
+    expect(dashboardWidgetsFor("HSE_OFFICER")).toEqual(["officerQueue", "quickActions"]);
+    expect(dashboardWidgetsFor("SUPERVISOR")).toEqual(["supervisorQueue"]);
+    expect(dashboardWidgetsFor("REPORTER")).toEqual(["reporterBrief"]);
+    expect(dashboardWidgetsFor("ADMIN")).toEqual(["kpi", "charts"]);
   });
 
   it("covers every role and menu pair", () => {

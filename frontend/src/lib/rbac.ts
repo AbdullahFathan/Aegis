@@ -7,7 +7,16 @@ export type NavItem =
   | "corrective-actions"
   | "reports"
   | "locations"
-  | "users";
+  | "users"
+  | "audit-logs";
+
+export type DashboardWidget =
+  | "kpi"
+  | "charts"
+  | "officerQueue"
+  | "supervisorQueue"
+  | "reporterBrief"
+  | "quickActions";
 
 const ALL_ROLES: Role[] = [
   "SUPER_ADMIN",
@@ -28,7 +37,10 @@ const visibility: Record<NavItem, readonly Role[]> = {
   reports: REPORT_ROLES,
   locations: ADMIN_ROLES,
   users: ADMIN_ROLES,
+  "audit-logs": ADMIN_ROLES,
 };
+
+const DASHBOARD_API_ROLES: Role[] = ["SUPER_ADMIN", "ADMIN", "HSE_MANAGER"];
 
 export function canSeeNavItem(role: string, item: NavItem) {
   return visibility[item].includes(role as Role);
@@ -36,6 +48,26 @@ export function canSeeNavItem(role: string, item: NavItem) {
 
 export function isAdminRole(role: string) {
   return ADMIN_ROLES.includes(role as Role);
+}
+
+export function canReadDashboardApi(role: string) {
+  return DASHBOARD_API_ROLES.includes(role as Role);
+}
+
+export function canExportReports(role: string) {
+  return REPORT_ROLES.includes(role as Role);
+}
+
+export function canReadAuditLogs(role: string) {
+  return ADMIN_ROLES.includes(role as Role);
+}
+
+export function dashboardWidgetsFor(role: string): DashboardWidget[] {
+  if (canReadDashboardApi(role)) return ["kpi", "charts"];
+  if (role === "HSE_OFFICER") return ["officerQueue", "quickActions"];
+  if (role === "SUPERVISOR") return ["supervisorQueue"];
+  if (role === "REPORTER") return ["reporterBrief"];
+  return [];
 }
 
 export type WorkflowAction = "verify" | "reject" | "close" | "startCA";

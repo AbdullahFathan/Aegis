@@ -24,11 +24,12 @@ export function useIncidentCorrectiveActions(incidentId: string | undefined) {
   });
 }
 
-export function useCorrectiveActions(filters: CaTrackerFilters) {
+export function useCorrectiveActions(filters: CaTrackerFilters, options?: { enabled?: boolean }) {
   const query = buildCaTrackerQuery(filters);
   return useQuery({
     queryKey: caTrackerQueryKey(filters),
     queryFn: () => api<CorrectiveAction[]>(`/corrective-actions${query ? `?${query}` : ""}`),
+    enabled: options?.enabled ?? true,
   });
 }
 

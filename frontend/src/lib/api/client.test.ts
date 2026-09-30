@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { api, getAccessToken, resetAuthState, setAccessToken } from "@/lib/api/client";
+import { api, apiDownload, getAccessToken, resetAuthState, setAccessToken } from "@/lib/api/client";
 import { getFileUrl, validateUploadFiles } from "@/lib/files";
 import { restoreFetch, stubFetch } from "@/test/stub-fetch";
 
@@ -68,6 +68,35 @@ describe("api client", () => {
     const headers = new Headers(fetchMock.mock.calls[0]?.[1].headers);
     expect(headers.get("Content-Type")).toBeNull();
     expect(fetchMock.mock.calls[0]?.[1].body).toBeInstanceOf(FormData);
+  });
+
+  it("returns a CSV file without parsing JSON", async () => {
+    setAccessToken("token");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("createdAt,userId\n", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="audit-logs.csv"',
+        },
+      }),
+    );
+    stubFetch(fetchMock as unknown as typeof fetch);
+    const result = await apiDownload("/audit-logs?format=csv");
+    expect(result.kind).toBe("file");
+    if (result.kind === "file") {
+      expect(result.filename).toBe("audit-logs.csv");
+    }
+  });
+
+  it("parses a 202 PDF job envelope", async () => {
+    setAccessToken("token");
+    const fetchMock = vi.fn().mockResolvedValue(
+      json(202, { success: true, data: { jobId: "job-1", status: "PENDING" } }),
+    );
+    stubFetch(fetchMock as unknown as typeof fetch);
+    const result = await apiDownload<{ jobId: string }>("/reports/monthly?format=pdf");
+    expect(result).toEqual({ kind: "json", data: { jobId: "job-1", status: "PENDING" }, status: 202 });
   });
 });
 

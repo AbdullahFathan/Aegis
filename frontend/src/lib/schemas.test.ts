@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  auditFilterSchema,
   caCreateSchema,
   caDoneSchema,
   caTrackerFilterSchema,
@@ -8,7 +9,9 @@ import {
   incidentFormSchema,
   locationSchema,
   loginSchema,
+  parseReportsSearchParams,
   rcaSchema,
+  reportsFilterSchema,
   userFormSchema,
 } from "@/lib/schemas";
 
@@ -144,6 +147,24 @@ describe("ca schemas", () => {
   it("accepts OVERDUE in tracker filters", () => {
     const result = caTrackerFilterSchema.safeParse({ status: "OVERDUE", view: "table" });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("reports and audit schemas", () => {
+  it("accepts pdf and csv report formats", () => {
+    expect(reportsFilterSchema.parse({ type: "monthly", format: "pdf" }).format).toBe("pdf");
+    expect(reportsFilterSchema.parse({ type: "ltifr", format: "csv" }).format).toBe("csv");
+    expect(reportsFilterSchema.safeParse({ format: "xlsx" }).success).toBe(false);
+  });
+
+  it("drops invalid report format from search params", () => {
+    const parsed = parseReportsSearchParams({ format: "docx", type: "monthly" });
+    expect(parsed.format).toBe("pdf");
+  });
+
+  it("rejects unknown audit actions", () => {
+    expect(auditFilterSchema.safeParse({ action: "DELETED", page: 1 }).success).toBe(false);
+    expect(auditFilterSchema.parse({ action: "STATUS_CHANGED" }).action).toBe("STATUS_CHANGED");
   });
 });
 

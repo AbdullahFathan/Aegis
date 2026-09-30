@@ -5,6 +5,7 @@ import {
   FileText,
   LayoutDashboard,
   MapPin,
+  ScrollText,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems: Array<{
   { id: "reports", href: "/reports", label: "Laporan", icon: FileText },
   { id: "locations", href: "/locations", label: "Lokasi", icon: MapPin },
   { id: "users", href: "/admin/users", label: "Users", icon: Users },
+  { id: "audit-logs", href: "/admin/audit-logs", label: "Audit log", icon: ScrollText },
 ];
 
 export function Sidebar() {

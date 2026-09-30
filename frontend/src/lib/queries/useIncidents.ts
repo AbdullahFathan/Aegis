@@ -48,10 +48,11 @@ export function toIncidentPayload(values: IncidentFormValues) {
   };
 }
 
-export function useIncidents(filters: IncidentFilters) {
+export function useIncidents(filters: IncidentFilters, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: incidentsQueryKey(filters),
     queryFn: () => api<IncidentList>(`/incidents?${buildIncidentListQuery(filters)}`),
+    enabled: options?.enabled ?? true,
   });
 }
 

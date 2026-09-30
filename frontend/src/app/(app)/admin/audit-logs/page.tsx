@@ -2,13 +2,13 @@
 
 import { Suspense } from "react";
 
-import { DashboardScreen } from "@/components/dashboard/DashboardScreen";
+import { AuditLogsScreen } from "@/components/admin/AuditLogsScreen";
 import { LoadingBlock } from "@/components/shared/EmptyState";
 
-export default function DashboardPage() {
+export default function AuditLogsPage() {
   return (
     <Suspense fallback={<LoadingBlock />}>
-      <DashboardScreen />
+      <AuditLogsScreen />
     </Suspense>
   );
 }

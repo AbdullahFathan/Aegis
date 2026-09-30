@@ -352,6 +352,144 @@ export function parseCaTrackerSearchParams(
   return { view: "table" };
 }
 
+export const REPORT_TYPES = ["monthly", "ltifr", "corrective-actions", "investigation"] as const;
+export const REPORT_FORMATS = ["pdf", "csv"] as const;
+
+export type ReportTypeValue = (typeof REPORT_TYPES)[number];
+export type ReportFormatValue = (typeof REPORT_FORMATS)[number];
+
+export const reportTypeLabels: Record<ReportTypeValue, string> = {
+  monthly: "Rekap insiden bulanan",
+  ltifr: "LTIFR & TRIFR",
+  "corrective-actions": "Status corrective action",
+  investigation: "Laporan investigasi",
+};
+
+export const dashboardFilterSchema = z.object({
+  category: z.enum(INCIDENT_CATEGORIES, { error: "Kategori tidak valid" }).optional(),
+  locationId: z.string().min(1).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export type DashboardFilterValues = z.infer<typeof dashboardFilterSchema>;
+
+export function parseDashboardSearchParams(
+  params: Record<string, string | string[] | undefined>,
+): DashboardFilterValues {
+  const pick = (key: string) => {
+    const value = params[key];
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+  const category = pick("category");
+  const parsed = dashboardFilterSchema.safeParse({
+    category:
+      category && (INCIDENT_CATEGORIES as readonly string[]).includes(category) ? category : undefined,
+    locationId: pick("locationId") || undefined,
+    from: pick("from") || undefined,
+    to: pick("to") || undefined,
+  });
+  if (parsed.success) return parsed.data;
+  return {};
+}
+
+export const reportsFilterSchema = z.object({
+  type: z.enum(REPORT_TYPES).default("monthly"),
+  format: z.enum(REPORT_FORMATS).default("pdf"),
+  category: z.enum(INCIDENT_CATEGORIES, { error: "Kategori tidak valid" }).optional(),
+  locationId: z.string().min(1).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  incidentId: z.string().optional(),
+  tab: z.enum(["generate", "archive"]).default("generate"),
+});
+
+export type ReportsFilterValues = z.infer<typeof reportsFilterSchema>;
+
+export function parseReportsSearchParams(
+  params: Record<string, string | string[] | undefined>,
+): ReportsFilterValues {
+  const pick = (key: string) => {
+    const value = params[key];
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+  const type = pick("type");
+  const format = pick("format");
+  const category = pick("category");
+  const tab = pick("tab");
+  const parsed = reportsFilterSchema.safeParse({
+    type: type && (REPORT_TYPES as readonly string[]).includes(type) ? type : "monthly",
+    format: format && (REPORT_FORMATS as readonly string[]).includes(format) ? format : "pdf",
+    category:
+      category && (INCIDENT_CATEGORIES as readonly string[]).includes(category) ? category : undefined,
+    locationId: pick("locationId") || undefined,
+    from: pick("from") || undefined,
+    to: pick("to") || undefined,
+    incidentId: pick("incidentId") || undefined,
+    tab: tab === "archive" ? "archive" : "generate",
+  });
+  if (parsed.success) return parsed.data;
+  return { type: "monthly", format: "pdf", tab: "generate" };
+}
+
+export const AUDIT_ACTIONS = [
+  "CREATED",
+  "UPDATED",
+  "STATUS_CHANGED",
+  "FILE_UPLOADED",
+  "APPROVED",
+  "REJECTED",
+  "CLOSED",
+] as const;
+
+export type AuditActionValue = (typeof AUDIT_ACTIONS)[number];
+
+export const auditActionLabels: Record<AuditActionValue, string> = {
+  CREATED: "Dibuat",
+  UPDATED: "Diubah",
+  STATUS_CHANGED: "Status berubah",
+  FILE_UPLOADED: "File diunggah",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+  CLOSED: "Ditutup",
+};
+
+export const auditFilterSchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  userId: z.string().min(1).optional(),
+  entityType: z.string().min(1).optional(),
+  action: z.enum(AUDIT_ACTIONS, { error: "Aksi tidak valid" }).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export type AuditFilterValues = z.infer<typeof auditFilterSchema>;
+
+export function parseAuditSearchParams(
+  params: Record<string, string | string[] | undefined>,
+): AuditFilterValues {
+  const pick = (key: string) => {
+    const value = params[key];
+    if (Array.isArray(value)) return value[0];
+    return value;
+  };
+  const action = pick("action");
+  const parsed = auditFilterSchema.safeParse({
+    from: pick("from") || undefined,
+    to: pick("to") || undefined,
+    userId: pick("userId") || undefined,
+    entityType: pick("entityType") || undefined,
+    action: action && (AUDIT_ACTIONS as readonly string[]).includes(action) ? action : undefined,
+    page: pick("page") ?? 1,
+    pageSize: pick("pageSize") ?? 50,
+  });
+  if (parsed.success) return parsed.data;
+  return { page: 1, pageSize: 50 };
+}
+
 export const NOTIFICATION_TYPES = [
   "INCIDENT_SUBMITTED",
   "INCIDENT_ESCALATED",
