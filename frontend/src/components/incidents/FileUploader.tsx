@@ -76,9 +76,10 @@ export function FileUploader({
       {canUpload ? (
         <div
           {...getRootProps()}
+          data-testid="evidence-dropzone"
           className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border-strong bg-canvas px-4 py-6 text-center"
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps()} data-testid="evidence-file" />
           <p className="text-sm text-ink">
             {isDragActive ? "Lepaskan file di sini" : "Seret file atau klik untuk memilih"}
           </p>

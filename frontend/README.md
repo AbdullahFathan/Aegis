@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aegis frontend
 
-## Getting Started
+UI Next.js (App Router) untuk pelaporan insiden K3. **Semua data bisnis berasal dari REST API Go**, bukan Route Handlers Next.js.
 
-First, run the development server:
+## Prasyarat
+
+- [Bun](https://bun.sh) 1.4+
+- Backend Go di `http://localhost:8080` (lihat README backend)
+- Salin [`.env.example`](./.env.example) ke `.env.local`
+
+## Perintah
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+bun install
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000). Proxy `/api/*` menuju `API_PROXY_TARGET` (default `http://localhost:8080`) agar cookie refresh HttpOnly tetap di origin Next.js.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+bun run lint
+bun run typecheck
+bun run test
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## E2E (Playwright)
 
-## Learn More
+Sebelum menjalankan tes, siapkan kredensial login untuk seluruh peran dan siapkan data yang dipakai alur (pengguna, lokasi, area, dan data terkait). API Go harus hidup (`GET http://localhost:8080/health`).
 
-To learn more about Next.js, take a look at the following resources:
+Spec `e2e/incident-draft.spec.ts` menjalankan siklus pelaporan dari draft sampai tutup, termasuk unggah bukti. Viewport tes 375×667.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+bunx playwright install chromium
+bun run e2e
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Variabel:
 
-## Deploy on Vercel
+| Env | Default | Keterangan |
+| --- | --- | --- |
+| `E2E_BASE_URL` | `http://localhost:3000` | Origin Next.js |
+| `E2E_API_URL` | `http://localhost:8080` | Health check Go |
+| `E2E_EMAIL` / `E2E_PASSWORD` | `reporter` / `REPORTER` | Seed, bukan akun produksi |
+| `E2E_SKIP_WEBSERVER=1` | — | Jangan menjalankan `bun run dev`; pakai server yang sudah jalan |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Aksesibilitas (AA)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Label eksplisit pada field; placeholder bukan pengganti label.
+- Focus ring orange (`--ring` / `orange-500`).
+- Teks tubuh `ink` `#1E293B` di `canvas` `#F8FAFC`. Caption `subtle` `#475569` (gelap dari `#64748B` PRD) agar kontras AA pada kanvas dan kartu putih.
+- Tombol aksi utama `min-h-11` (44px). Checklist axe tidak diwajibkan di CI.
+
+## Empty / error / loading (halaman list)
+
+| Route | Loading | Error | Empty |
+| --- | --- | --- | --- |
+| `/incidents` | skeleton | pesan API / 403 | + CTA buat laporan |
+| `/corrective-actions` | skeleton | pesan API | “Tidak ada CA sesuai filter” |
+| `/notifications` | skeleton | pesan API | EmptyState + filter |
+| `/dashboard` | skeleton | QueryError | widget kosong |
+| `/reports` | skeleton | gagal generate spesifik | arsip kosong |
+| `/locations` | skeleton | 403/API | CTA daftarkan lokasi |
+| `/admin/users` | skeleton | 403/API | EmptyState + tambah user |
+| `/admin/audit-logs` | skeleton | 403/API | EmptyState filter |
+
+## Design QA (halaman utama)
+
+- Palet Warm Safety: CTA `#E85D04`, sidebar `#1A237E`, canvas `#F8FAFC`.
+- Lifecycle insiden: `DRAFT` … `CLOSED` / `REJECTED` (bukan `OPEN` / `IN_REVIEW`).
+- Radius `rounded-md` / `rounded-lg`; tanpa FAB `rounded-full`.
+- Bukan Vite; data dari Go API.
+
+## Docker frontend
+
+Image Compose production untuk service `frontend` **belum** termasuk phase ini (tiket FE-P5-06).

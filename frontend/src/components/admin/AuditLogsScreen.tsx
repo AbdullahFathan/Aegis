@@ -9,7 +9,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
-import { LoadingBlock, PageHeader, QueryError } from "@/components/shared/EmptyState";
+import { EmptyState, LoadingBlock, PageHeader, QueryError } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -155,32 +155,52 @@ export function AuditLogsScreen() {
       />
       <p className="text-xs text-subtle">Catatan bersifat tetap — tidak dapat diubah atau dihapus.</p>
       <div className="flex flex-col gap-4 md:flex-row md:flex-wrap">
-        <Input
-          type="date"
-          className="h-9 rounded-md md:w-40"
-          value={isoToDateInput(filters.from)}
-          onChange={(event) => replaceFilters({ from: event.target.value || undefined })}
-          aria-label="Dari tanggal"
-        />
-        <Input
-          type="date"
-          className="h-9 rounded-md md:w-40"
-          value={isoToDateInput(filters.to)}
-          onChange={(event) => replaceFilters({ to: event.target.value || undefined })}
-          aria-label="Sampai tanggal"
-        />
-        <Input
-          className="h-9 rounded-md md:w-56"
-          placeholder="User ID"
-          value={filters.userId ?? ""}
-          onChange={(event) => replaceFilters({ userId: event.target.value || undefined })}
-        />
-        <Input
-          className="h-9 rounded-md md:w-40"
-          placeholder="Tipe entitas"
-          value={filters.entityType ?? ""}
-          onChange={(event) => replaceFilters({ entityType: event.target.value || undefined })}
-        />
+        <div className="flex min-w-0 flex-col gap-1">
+          <label className="text-sm font-medium text-ink" htmlFor="audit-from">
+            Dari tanggal
+          </label>
+          <Input
+            id="audit-from"
+            type="date"
+            className="h-9 rounded-md md:w-40"
+            value={isoToDateInput(filters.from)}
+            onChange={(event) => replaceFilters({ from: event.target.value || undefined })}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <label className="text-sm font-medium text-ink" htmlFor="audit-to">
+            Sampai tanggal
+          </label>
+          <Input
+            id="audit-to"
+            type="date"
+            className="h-9 rounded-md md:w-40"
+            value={isoToDateInput(filters.to)}
+            onChange={(event) => replaceFilters({ to: event.target.value || undefined })}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <label className="text-sm font-medium text-ink" htmlFor="audit-user">
+            User ID
+          </label>
+          <Input
+            id="audit-user"
+            className="h-9 rounded-md md:w-56"
+            value={filters.userId ?? ""}
+            onChange={(event) => replaceFilters({ userId: event.target.value || undefined })}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <label className="text-sm font-medium text-ink" htmlFor="audit-entity">
+            Tipe entitas
+          </label>
+          <Input
+            id="audit-entity"
+            className="h-9 rounded-md md:w-40"
+            value={filters.entityType ?? ""}
+            onChange={(event) => replaceFilters({ entityType: event.target.value || undefined })}
+          />
+        </div>
         <Select
           value={filters.action ?? "ALL"}
           onValueChange={(value) =>
@@ -215,7 +235,13 @@ export function AuditLogsScreen() {
           }
         />
       ) : null}
-      {logs.data ? (
+      {logs.data && logs.data.items.length === 0 ? (
+        <EmptyState
+          title="Tidak ada entri"
+          description="Tidak ada audit log sesuai filter. Ubah rentang tanggal atau kriteria lain."
+        />
+      ) : null}
+      {logs.data && logs.data.items.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-border bg-white">
           <Table>
             <TableHeader className="bg-canvas">
@@ -235,23 +261,15 @@ export function AuditLogsScreen() {
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="px-4 py-6 text-sm text-subtle">
-                    Tidak ada entri sesuai filter.
-                  </TableCell>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} className="h-12">
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="px-4 text-sm">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
                 </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id} className="h-12">
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="px-4 text-sm">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>

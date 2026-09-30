@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { LoadingBlock, PageHeader, QueryError } from "@/components/shared/EmptyState";
+import { EmptyState, LoadingBlock, PageHeader, QueryError } from "@/components/shared/EmptyState";
 import { ApiError } from "@/lib/api/client";
 import { mapApiError } from "@/lib/errors";
 import { useCreateUser, usePatchUser, useUsers } from "@/lib/queries/useAdmin";
@@ -92,7 +92,7 @@ export function UsersScreen() {
         header: () => <span className="block text-right">Aksi</span>,
         cell: ({ row }) => (
           <div className="text-right">
-            <Button variant="ghost" size="sm" onClick={() => setEditing(row.original)}>
+            <Button variant="ghost" size="touch" onClick={() => setEditing(row.original)}>
               Ubah
             </Button>
           </div>
@@ -161,7 +161,9 @@ export function UsersScreen() {
         title="Users"
         actions={
           admin ? (
-            <Button onClick={() => setCreateOpen(true)}>Tambah user</Button>
+            <Button size="touch" onClick={() => setCreateOpen(true)}>
+              Tambah user
+            </Button>
           ) : null
         }
       />
@@ -177,7 +179,17 @@ export function UsersScreen() {
       ) : null}
       {users.data ? (
         users.data.items.length === 0 ? (
-          <p className="text-sm text-subtle">Belum ada user pada filter ini.</p>
+          <EmptyState
+            title="Belum ada user"
+            description="Tidak ada akun pada halaman ini. Tambah user baru jika Anda admin."
+            action={
+              admin ? (
+                <Button size="touch" onClick={() => setCreateOpen(true)}>
+                  Tambah user
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-white">
             <Table>
@@ -220,7 +232,7 @@ export function UsersScreen() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              size="sm"
+              size="touch"
               disabled={filters.page <= 1}
               onClick={() => setFilters((current) => ({ ...current, page: current.page - 1 }))}
             >
@@ -228,7 +240,7 @@ export function UsersScreen() {
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="touch"
               disabled={filters.page >= pageCount}
               onClick={() => setFilters((current) => ({ ...current, page: current.page + 1 }))}
             >
@@ -284,7 +296,7 @@ export function UsersScreen() {
               </p>
             ) : null}
             <DialogFooter className="border-border bg-white">
-              <Button type="submit" disabled={createUser.isPending}>
+              <Button type="submit" size="touch" disabled={createUser.isPending}>
                 Simpan
               </Button>
             </DialogFooter>
@@ -336,7 +348,7 @@ export function UsersScreen() {
                 </p>
               ) : null}
               <DialogFooter className="border-border bg-white">
-                <Button type="submit" disabled={patchUser.isPending}>
+                <Button type="submit" size="touch" disabled={patchUser.isPending}>
                   Simpan
                 </Button>
               </DialogFooter>

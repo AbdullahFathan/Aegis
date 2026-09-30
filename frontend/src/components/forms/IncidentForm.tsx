@@ -3,7 +3,7 @@
 import { useForm } from "@tanstack/react-form";
 import { CircleHelp } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FormFields, SelectField, TextareaField, TextField } from "@/components/forms/fields";
 import { FileUploader } from "@/components/incidents/FileUploader";
@@ -107,6 +107,7 @@ export function IncidentForm({ incidentId }: { incidentId?: string }) {
   const [step, setStep] = useState(0);
   const [savedId, setSavedId] = useState<string | undefined>(incidentId);
   const [formError, setFormError] = useState<string | null>(null);
+  const skipServerHydrate = useRef(false);
   const locations = useLocations();
   const existing = useIncident(savedId);
   const files = useIncidentFiles(savedId);
@@ -126,8 +127,10 @@ export function IncidentForm({ incidentId }: { incidentId?: string }) {
   });
 
   useEffect(() => {
-    if (!existing.data) return;
+    if (!existing.data?.title) return;
+    if (skipServerHydrate.current) return;
     form.reset(fromIncident(existing.data));
+    skipServerHydrate.current = true;
   }, [existing.data, form]);
 
   const submittedLocked =
@@ -136,6 +139,7 @@ export function IncidentForm({ incidentId }: { incidentId?: string }) {
     existing.data.status !== "REJECTED";
 
   async function persist(values: IncidentFormValues) {
+    skipServerHydrate.current = true;
     if (savedId) {
       return patchIncident.mutateAsync({ id: savedId, values });
     }
@@ -388,28 +392,34 @@ export function IncidentForm({ incidentId }: { incidentId?: string }) {
                       <div className="flex flex-col gap-3">
                         {rows.map((row, index) => (
                           <div key={index} className="grid gap-2 md:grid-cols-2">
-                            <Input
-                              className="h-9 rounded-md"
-                              placeholder="Nama saksi"
-                              value={row.name}
-                              onChange={(event) => {
-                                const next = rows.map((item, i) =>
-                                  i === index ? { ...item, name: event.target.value } : item,
-                                );
-                                field.handleChange(next);
-                              }}
-                            />
-                            <Input
-                              className="h-9 rounded-md"
-                              placeholder="Jabatan"
-                              value={row.position}
-                              onChange={(event) => {
-                                const next = rows.map((item, i) =>
-                                  i === index ? { ...item, position: event.target.value } : item,
-                                );
-                                field.handleChange(next);
-                              }}
-                            />
+                            <div className="flex flex-col gap-1">
+                              <FieldLabel htmlFor={`witness-name-${index}`}>Nama saksi</FieldLabel>
+                              <Input
+                                id={`witness-name-${index}`}
+                                className="h-11 min-h-11 rounded-md"
+                                value={row.name}
+                                onChange={(event) => {
+                                  const next = rows.map((item, i) =>
+                                    i === index ? { ...item, name: event.target.value } : item,
+                                  );
+                                  field.handleChange(next);
+                                }}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <FieldLabel htmlFor={`witness-position-${index}`}>Jabatan saksi</FieldLabel>
+                              <Input
+                                id={`witness-position-${index}`}
+                                className="h-11 min-h-11 rounded-md"
+                                value={row.position}
+                                onChange={(event) => {
+                                  const next = rows.map((item, i) =>
+                                    i === index ? { ...item, position: event.target.value } : item,
+                                  );
+                                  field.handleChange(next);
+                                }}
+                              />
+                            </div>
                           </div>
                         ))}
                         <Button
@@ -497,6 +507,7 @@ export function IncidentForm({ incidentId }: { incidentId?: string }) {
               type="button"
               variant="ghost"
               className="min-h-11"
+              data-testid="save-draft"
               disabled={pending}
               onClick={() => void handleSaveDraft()}
             >

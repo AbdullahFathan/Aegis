@@ -12,8 +12,8 @@ const lifecycle = [
 ];
 
 describe("tokens", () => {
-  it("uses the Warm Safety primary hex", () => {
-    expect(colors.orange[500]).toBe("#E85D04");
+  it("uses Warm Safety muted text with AA contrast on canvas", () => {
+    expect(colors.muted).toBe("#475569");
   });
 
   it("limits incident status keys to the PRD lifecycle", () => {

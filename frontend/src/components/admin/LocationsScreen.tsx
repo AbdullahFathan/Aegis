@@ -117,7 +117,9 @@ export function LocationsScreen() {
         title="Lokasi"
         actions={
           admin ? (
-            <Button onClick={() => setSiteOpen(true)}>Daftarkan lokasi</Button>
+            <Button size="touch" onClick={() => setSiteOpen(true)}>
+              Daftarkan lokasi
+            </Button>
           ) : null
         }
       />
@@ -138,7 +140,9 @@ export function LocationsScreen() {
           description="Daftarkan wilayah, lalu site dan area kerja yang dipakai saat pelaporan insiden."
           action={
             admin ? (
-              <Button onClick={() => setSiteOpen(true)}>Daftarkan lokasi</Button>
+              <Button size="touch" onClick={() => setSiteOpen(true)}>
+                Daftarkan lokasi
+              </Button>
             ) : null
           }
         />
@@ -166,7 +170,7 @@ export function LocationsScreen() {
               </p>
             ) : null}
             <div className="md:col-span-2">
-              <Button type="submit" variant="outline" disabled={createRegion.isPending}>
+              <Button type="submit" variant="outline" size="touch" disabled={createRegion.isPending}>
                 Simpan wilayah
               </Button>
             </div>
@@ -212,10 +216,10 @@ export function LocationsScreen() {
                 </div>
                 {admin && site.isActive ? (
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setAreaFor(site.id)}>
+                    <Button variant="ghost" size="touch" onClick={() => setAreaFor(site.id)}>
                       Tambah area
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setConfirmId(site.id)}>
+                    <Button variant="outline" size="touch" onClick={() => setConfirmId(site.id)}>
                       Nonaktifkan
                     </Button>
                   </div>
@@ -295,7 +299,7 @@ export function LocationsScreen() {
               </p>
             ) : null}
             <DialogFooter className="border-border bg-white">
-              <Button type="submit" disabled={createLocation.isPending}>
+              <Button type="submit" size="touch" disabled={createLocation.isPending}>
                 Simpan
               </Button>
             </DialogFooter>
@@ -324,7 +328,7 @@ export function LocationsScreen() {
               </p>
             ) : null}
             <DialogFooter className="border-border bg-white">
-              <Button type="submit" disabled={createArea.isPending}>
+              <Button type="submit" size="touch" disabled={createArea.isPending}>
                 Simpan
               </Button>
             </DialogFooter>
@@ -346,11 +350,12 @@ export function LocationsScreen() {
             </p>
           ) : null}
           <DialogFooter className="border-border bg-white">
-            <Button variant="outline" onClick={() => setConfirmId(null)}>
+            <Button variant="outline" size="touch" onClick={() => setConfirmId(null)}>
               Batal
             </Button>
             <Button
               variant="destructive"
+              size="touch"
               disabled={deactivate.isPending}
               onClick={() => {
                 if (!confirmId) return;

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export const fieldClass = "h-9 rounded-md text-sm";
+export const fieldClass = "h-11 min-h-11 rounded-md text-sm";
 
 type BoundField = {
   name: string;
@@ -128,7 +128,12 @@ export function SelectField({
               value={current || null}
               onValueChange={(value) => field.handleChange(value ?? "")}
             >
-              <SelectTrigger id={field.name} className="h-9 w-full rounded-md" aria-invalid={invalid}>
+              <SelectTrigger
+                id={field.name}
+                data-testid={`select-${name}`}
+                className="h-11 min-h-11 w-full rounded-md"
+                aria-invalid={invalid}
+              >
                 <SelectValue placeholder={placeholder} />
               </SelectTrigger>
               <SelectContent>

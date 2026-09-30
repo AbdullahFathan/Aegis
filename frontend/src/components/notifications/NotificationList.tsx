@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 
+import { EmptyState, LoadingBlock, QueryError } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { notificationHref, sortNotificationsUnreadFirst } from "@/lib/notifications";
 import { formatDateTime } from "@/lib/datetime";
+import { mapApiError } from "@/lib/errors";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -44,11 +46,29 @@ export function NotificationList({
   const visible = compact ? items.slice(0, 8) : items;
 
   if (notifications.isPending) {
-    return <p className="text-xs text-subtle">Memuat notifikasi…</p>;
+    return compact ? <p className="text-sm text-subtle">Memuat notifikasi…</p> : <LoadingBlock />;
+  }
+
+  if (notifications.isError) {
+    return (
+      <QueryError message={mapApiError(notifications.error, "Gagal memuat notifikasi.")} />
+    );
   }
 
   if (visible.length === 0) {
-    return <p className="text-sm text-subtle">Tidak ada notifikasi.</p>;
+    if (compact) {
+      return <p className="text-sm text-subtle">Tidak ada notifikasi.</p>;
+    }
+    return (
+      <EmptyState
+        title="Tidak ada notifikasi"
+        description={
+          unreadOnly || (typeFilter && typeFilter !== "ALL")
+            ? "Tidak ada notifikasi sesuai filter. Ubah filter atau lihat semua notifikasi."
+            : "Belum ada pemberitahuan untuk akun ini."
+        }
+      />
+    );
   }
 
   return (
@@ -63,16 +83,13 @@ export function NotificationList({
           Tandai semua dibaca
         </Button>
       ) : null}
-      {visible.length === 0 ? (
-        <p className="text-sm text-subtle">Tidak ada notifikasi sesuai filter.</p>
-      ) : null}
       <ul className="flex flex-col gap-2">
         {visible.map((item) => (
           <li key={item.id}>
             <Link
               href={notificationHref(item)}
               className={cn(
-                "block rounded-md border border-border p-3",
+                "block min-h-11 rounded-md border border-border p-3",
                 priorityClass[item.priority],
                 !item.isRead && "font-medium",
               )}

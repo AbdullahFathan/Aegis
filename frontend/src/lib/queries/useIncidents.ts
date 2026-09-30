@@ -95,6 +95,7 @@ export function useCreateIncident() {
     mutationFn: (values: IncidentFormValues) =>
       api<Incident>("/incidents", { method: "POST", body: toIncidentPayload(values) }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -112,6 +113,7 @@ export function usePatchIncident() {
         },
       }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -122,6 +124,7 @@ export function useSubmitIncident() {
   return useMutation({
     mutationFn: (id: string) => api<Incident>(`/incidents/${id}/submit`, { method: "POST" }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -136,6 +139,7 @@ export function useVerifyIncident() {
         body: input.comment ? { comment: input.comment } : undefined,
       }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -150,6 +154,7 @@ export function useRejectIncident() {
         body: { comment: input.comment },
       }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -164,6 +169,7 @@ export function useCloseIncident() {
         body: input.comment ? { comment: input.comment } : undefined,
       }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });
@@ -178,6 +184,7 @@ export function useStartCorrectiveAction() {
         body: input.comment ? { comment: input.comment } : undefined,
       }),
     onSuccess: (incident) => {
+      queryClient.setQueryData(["incident", incident.id], incident);
       invalidateIncident(queryClient, incident.id);
     },
   });

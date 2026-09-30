@@ -61,7 +61,7 @@ export function LoginForm() {
                 {mapLoginError(login.error)}
               </p>
             ) : null}
-            <Button type="submit" disabled={login.isPending}>
+            <Button type="submit" size="touch" disabled={login.isPending}>
               {login.isPending ? "Memproses" : "Masuk"}
             </Button>
           </form>

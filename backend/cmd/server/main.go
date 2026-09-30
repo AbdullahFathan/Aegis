@@ -132,7 +132,7 @@ func newRouter(cfg config.Config, log *zap.Logger, db *gorm.DB, rdb *redis.Clien
 
 	limiter := middleware.RedisLimiter{
 		Client: rdb,
-		Limit:  5,
+		Limit:  50,
 		Window: time.Minute,
 		Prefix: "rl:login:",
 	}

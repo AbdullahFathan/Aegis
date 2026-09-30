@@ -194,7 +194,7 @@ export function RCAWizard({ incidentId }: { incidentId: string }) {
                     <FieldLabel htmlFor={`why-${index}`}>Mengapa {index + 1}</FieldLabel>
                     <Input
                       id={`why-${index}`}
-                      className="h-9 rounded-md"
+                      className="h-11 min-h-11 rounded-md"
                       value={field.state.value[index]?.why ?? ""}
                       onChange={(event) => {
                         const next = [...field.state.value];
@@ -207,7 +207,7 @@ export function RCAWizard({ incidentId }: { incidentId: string }) {
                     <FieldLabel htmlFor={`answer-${index}`}>Jawaban</FieldLabel>
                     <Input
                       id={`answer-${index}`}
-                      className="h-9 rounded-md"
+                      className="h-11 min-h-11 rounded-md"
                       value={field.state.value[index]?.answer ?? ""}
                       onChange={(event) => {
                         const next = [...field.state.value];

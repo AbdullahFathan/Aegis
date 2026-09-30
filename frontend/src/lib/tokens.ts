@@ -12,7 +12,7 @@ export const colors = {
   canvas: "#F8FAFC",
   surface: "#FFFFFF",
   ink: "#1E293B",
-  muted: "#64748B",
+  muted: "#475569", // caption AA on canvas/white; PRD listed #64748B
   border: "#E2E8F0",
   borderStrong: "#CBD5E1",
   successBg: "#E8F5E9",

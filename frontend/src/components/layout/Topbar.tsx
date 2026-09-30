@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,7 +11,7 @@ import { roleLabels, type Role } from "@/lib/schemas";
 import { useLogout, useSession } from "@/lib/queries/useSession";
 import { useNotifications } from "@/lib/queries/useNotifications";
 
-export function Topbar() {
+export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
   const session = useSession();
   const logout = useLogout();
   const router = useRouter();
@@ -21,8 +21,22 @@ export function Topbar() {
   const unread = (notifications.data ?? []).filter((item) => !item.isRead).length;
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-white px-6">
-      <p className="text-sm text-subtle">Pelaporan insiden K3</p>
+    <header className="flex h-14 items-center justify-between border-b border-border bg-white px-3 md:px-6">
+      <div className="flex min-w-0 items-center gap-2">
+        {onOpenNav ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="min-h-11 min-w-11 md:hidden"
+            aria-label="Buka menu"
+            onClick={onOpenNav}
+          >
+            <Menu className="size-4" />
+          </Button>
+        ) : null}
+        <p className="truncate text-sm text-subtle">Pelaporan insiden K3</p>
+      </div>
       <div className="flex items-center gap-3">
         <Popover>
           <PopoverTrigger
@@ -55,7 +69,7 @@ export function Topbar() {
         ) : null}
         <Button
           variant="outline"
-          size="sm"
+          size="touch"
           disabled={logout.isPending}
           onClick={() => {
             logout.mutate(undefined, {

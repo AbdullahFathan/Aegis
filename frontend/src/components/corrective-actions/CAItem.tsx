@@ -96,32 +96,12 @@ export function CAItem({
       ) : item.completionNotes ? (
         <p className="mt-2 text-sm leading-relaxed text-ink">{item.completionNotes}</p>
       ) : null}
-      {canUploadEvidence && item.status !== "OPEN" ? (
-        <div className="mt-3">
-          <p className="mb-2 text-xs text-subtle">Bukti penyelesaian</p>
-          <FileUploader
-            files={evidence}
-            canUpload={canUpdate && item.status !== "VERIFIED"}
-            uploading={upload.isPending}
-            onUpload={async (picked) => {
-              await upload.mutateAsync({
-                id: item.incidentId,
-                files: picked,
-                correctiveActionId: item.id,
-              });
-            }}
-            onRefreshFiles={async () => (await onRefreshFiles())?.filter((file) => file.correctiveActionId === item.id)}
-          />
-        </div>
-      ) : evidence.length > 0 ? (
-        <FileUploader files={evidence} canUpload={false} onUpload={async () => undefined} onRefreshFiles={onRefreshFiles} />
-      ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-xs text-danger-500">
           {error}
         </p>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="relative z-10 mt-3 flex flex-wrap gap-2">
         {canUpdate && next ? (
           <Button
             className="min-h-11"
@@ -149,6 +129,26 @@ export function CAItem({
           </Button>
         ) : null}
       </div>
+      {canUploadEvidence && item.status !== "OPEN" ? (
+        <div className="mt-3">
+          <p className="mb-2 text-xs text-subtle">Bukti penyelesaian</p>
+          <FileUploader
+            files={evidence}
+            canUpload={canUpdate && item.status !== "VERIFIED"}
+            uploading={upload.isPending}
+            onUpload={async (picked) => {
+              await upload.mutateAsync({
+                id: item.incidentId,
+                files: picked,
+                correctiveActionId: item.id,
+              });
+            }}
+            onRefreshFiles={async () => (await onRefreshFiles())?.filter((file) => file.correctiveActionId === item.id)}
+          />
+        </div>
+      ) : evidence.length > 0 ? (
+        <FileUploader files={evidence} canUpload={false} onUpload={async () => undefined} onRefreshFiles={onRefreshFiles} />
+      ) : null}
     </article>
   );
 }

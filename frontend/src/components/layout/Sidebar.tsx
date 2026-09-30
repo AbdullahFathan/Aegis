@@ -31,13 +31,13 @@ const navItems: Array<{
   { id: "audit-logs", href: "/admin/audit-logs", label: "Audit log", icon: ScrollText },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const session = useSession();
   const role = session.data?.role ?? "";
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-navy-800 text-white/70">
+    <aside className="flex h-full min-h-screen w-60 shrink-0 flex-col bg-navy-800 text-white/70">
       <div className="flex h-14 items-center px-4">
         <span className="text-base font-semibold text-white">Aegis</span>
       </div>
@@ -50,8 +50,9 @@ export function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
+              onClick={() => onNavigate?.()}
               className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm",
+                "flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-sm",
                 active ? "bg-orange-500 text-white" : "text-white/70 hover:bg-white/10 hover:text-white",
               )}
             >

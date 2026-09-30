@@ -107,11 +107,14 @@ export function WorkflowActions({
             <DialogTitle>Kembalikan laporan</DialogTitle>
             <DialogDescription>Catatan wajib agar pelapor tahu apa yang perlu diperbaiki.</DialogDescription>
           </DialogHeader>
+          <label className="text-sm font-medium text-ink" htmlFor="reject-comment">
+            Alasan pengembalian
+          </label>
           <Textarea
+            id="reject-comment"
             className="min-h-24 rounded-md"
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="Alasan pengembalian"
           />
           <DialogFooter className="border-border bg-white">
             <Button
@@ -151,11 +154,14 @@ export function WorkflowActions({
                 : "Status hanya berubah lewat aksi ini, bukan ubahan langsung."}
             </DialogDescription>
           </DialogHeader>
+          <label className="text-sm font-medium text-ink" htmlFor="workflow-comment">
+            Catatan (opsional)
+          </label>
           <Textarea
+            id="workflow-comment"
             className="min-h-20 rounded-md"
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="Catatan (opsional)"
           />
           <DialogFooter className="border-border bg-white">
             <Button
